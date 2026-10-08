@@ -3,6 +3,7 @@
 #pragma once
 
 #include <QObject>
+#include <QElapsedTimer>
 
 #include <map>
 #include <memory>
@@ -30,6 +31,7 @@ public:
   struct Options {
     bool enableUInput = true; // enable virtual uinput device
     std::vector<SupportedDevice> additionalDevices;
+    int activeTimeoutMs = 600;
   };
 
   explicit Spotlight(QObject* parent, Options options, Settings* settings);
@@ -37,6 +39,8 @@ public:
 
   bool spotActive() const { return m_spotActive; }
   void setSpotActive(bool active);
+  void setActiveTimeoutMs(int timeoutMs);
+  void restartActiveTimeout();
 
   struct ConnectedDeviceInfo {
     DeviceId id;
@@ -56,6 +60,7 @@ signals:
   void deviceAccessError(const QString& name, const QString& path);
   void anySpotlightDeviceConnectedChanged(bool connected);
   void spotActiveChanged(bool isActive);
+  void pointerMotion(int deltaX, int deltaY);
   void slideNavigationPressed();
 
 private:
@@ -75,6 +80,8 @@ private:
   std::vector<DeviceId> m_activeDeviceIds;
 
   QTimer* m_activeTimer = nullptr;
+  int m_activeTimeoutMs = 600;
+  QElapsedTimer m_pointerActivityTimer;
   QTimer* m_connectionTimer = nullptr;
   QTimer* m_holdMoveEventTimer = nullptr;
   bool m_spotActive = false;

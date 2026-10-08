@@ -1,168 +1,124 @@
-# Projecteur
+# Projecteur GNOME
 
-**A virtual laser pointer and live magnifier built for KDE Plasma presentations.**
+A configurable laser dot for **Logitech Spotlight** on **Ubuntu 26.04,
+GNOME Shell 50, and Wayland**.
 
-[![Build status](https://github.com/gbin/Projecteur/actions/workflows/ci-build.yml/badge.svg?branch=develop)](https://github.com/gbin/Projecteur/actions/workflows/ci-build.yml?query=branch%3Adevelop)
-![KDE Plasma 6.7+](https://img.shields.io/badge/KDE_Plasma-6.7%2B-1d99f3?logo=kde&logoColor=white)
-![Wayland only](https://img.shields.io/badge/display-Wayland_only-5c6bc0)
-[![MIT license](https://img.shields.io/badge/license-MIT-2ea44f)](./LICENSE.md)
+[繁體中文](README.zh-TW.md) · [Developer notes](gnome/README.md) ·
+[Upstream Projecteur](https://github.com/gbin/Projecteur)
 
-Projecteur turns a Logitech Spotlight 1/2 and another supported presenter into an
-on-screen spotlight your audience can see in the room, in a screen share, and in
-the recording. Point, magnify, change slides, run a timer, and keep everything
-close at hand in Plasma.
+This fork reuses Projecteur's presenter device handling and adds a GNOME Shell
+extension for the on-screen pointer. The GNOME path builds independently of
+Plasma. It has been tested locally with GNOME 50.1, a Logitech Spotlight USB
+receiver (`046d:c53e`), and OnlyOffice fullscreen presentations.
 
-[<img src="doc/screenshot-spot.png" alt="Projecteur highlighting and magnifying part of a presentation slide" width="900">](./doc/screenshot-spot.png)
+<img src="doc/gnome-spotlight-demo.png" alt="Logitech Spotlight controlling a purple laser dot on a laptop display" width="480">
 
-> [!NOTE]
-> The current development line requires **KDE Plasma 6.7 or newer**, **Qt 6.10
-> or newer**, and a **Wayland session**. The previous Qt 5, X11, and
-> cross-desktop codebase is maintained for critical fixes on the
-> [`legacy/qt5`](https://github.com/gbin/Projecteur/tree/legacy/qt5) branch.
+The purple dot on the display is the software pointer. The red arrow is an annotation in this demo photo.
 
-## Why Projecteur?
+## Features
 
-- **Visible everywhere.** Unlike a physical laser, the spotlight appears in
-  projectors, screen shares, and recordings.
-- **Live magnification.** KWin and KPipeWire keep video, animation, and changing
-  content moving inside the zoom area.
-- **Made for Plasma.** Native system tray controls, global shortcuts,
-  notifications, and multi-screen support feel at home on KDE.
-- **Designed for presenting.** Save spotlight presets, remap presenter buttons,
-  control volume or scrolling, and use haptic timer alerts on compatible devices.
-- **Useful without hardware.** Trigger the spotlight from a global shortcut for
-  online demos and video calls.
-
-## See it in action
-
-### Magnify the content
-
-Choose smooth scaling for images, edge-enhanced **Text and UI** mode for
-documents and application demos, or pixel-perfect scaling for source pixels.
-The zoom mode is saved with each spotlight preset.
-
-[<img src="doc/screenshot-text-zoom.png" alt="Projecteur magnifying text and interface content with a sharp green-bordered spotlight" width="620">](./doc/screenshot-text-zoom.png)
-
-### Stay in control from the Plasma panel
-
-See connected presenters, test the spotlight, switch presets, start a
-presentation timer, and open preferences without breaking your flow.
-
-[<img src="doc/screenshot-traymenu.png" alt="Projecteur Plasma applet showing a connected Logitech Spotlight 2 and quick controls" width="480">](./doc/screenshot-traymenu.png)
-
-### Make the spotlight yours
-
-Tune the shape, shade, zoom, cursor, border, multi-screen behavior, and presets
-with native KDE controls.
-
-[<img src="doc/screenshot-settings.png" alt="Projecteur preferences with spotlight shape, shade, zoom, cursor, border, and preset controls" width="620">](./doc/screenshot-settings.png)
+- Laser dot controlled by presenter movement.
+- Adjustable color and diameter, with matching border and glow.
+- Hide the system cursor while the dot is visible; restore it afterward.
+- Adjustable idle duration: 0.1–30 seconds, default 3 seconds.
+- Previous/next slide forwarding and fullscreen overlay support.
+- Preferences saved automatically and applied immediately.
+- Traditional Chinese for Chinese locales, including Simplified Chinese system
+  locales; English for other locales. GTK's built-in dialog controls follow
+  the system's own translations.
 
 ## Install
 
-Stable releases provide source, Arch Linux, Fedora, openSUSE Tumbleweed,
-Debian testing, and Ubuntu packages on the
-[GitHub Releases page](https://github.com/gbin/Projecteur/releases). The install
-step is important: KWin grants zoom access using Projecteur's installed desktop
-metadata, and the presenter needs the installed udev rules.
-
-### Arch Linux and Arch-based distributions
-
-Install [`just`](https://github.com/casey/just), then use the included packaging
-workflow. It installs missing build dependencies, creates a native package, and
-installs it with `pacman`.
+Download and extract this repository's source ZIP, open a terminal in the
+extracted folder, and run:
 
 ```sh
-sudo pacman -S --needed just
-git clone https://github.com/gbin/Projecteur.git
-cd Projecteur
-just install
+./install.sh
 ```
 
-### Other distributions
+Run it as your normal desktop user. The installer handles build dependencies,
+compilation, device permissions, the user service, and extension enablement.
+It may request your administrator password for missing packages or device
+permissions. The daemon and extension are installed in your user account.
 
-Install the [build dependencies](./CONTRIBUTING.md#requirements), then:
+**Reconnect the presenter, then log out and back in.** The extension will be
+enabled automatically; no second installation command is needed. Updates use
+this same command and preserve your saved preferences.
+
+If dependencies and device permissions are managed separately:
 
 ```sh
-git clone https://github.com/gbin/Projecteur.git
-cd Projecteur
-cmake -S . -B build \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_INSTALL_PREFIX=/usr \
-  -DPACKAGE_TARGETS=OFF
-cmake --build build --parallel
-sudo cmake --install build
-sudo udevadm control --reload-rules
-sudo udevadm trigger
+./install.sh --no-system-changes
 ```
 
-Reconnect the presenter after installing, then launch **Projecteur** from the
-application menu.
+Automatic installation targets Ubuntu 26.04 / GNOME 50 / Wayland.
+Other distributions and GNOME versions have not been validated.
 
-## Your first minute
+## Configure
 
-1. Open the Projecteur applet in the Plasma system tray.
-2. Confirm that your presenter appears under **Connected presenters**.
-3. Select **Test Spotlight** to try the current look.
-4. Open **Preferences** to adjust the spotlight or map presenter buttons.
-5. Optionally assign **Toggle Spotlight** under **Preferences → Shortcuts** for
-   keyboard-only use.
+Open **Extensions → Projecteur Pointer for Ubuntu 26.04 → Settings**, or run:
 
-The applet can also start a presentation timer immediately or on the next button
-press. While it runs, the panel badge shows the remaining minutes; compatible
-presenters vibrate when time expires.
+```sh
+gnome-extensions prefs projecteur-pointer-ubuntu26@projecteur.github.io
+```
 
-## Supported presenters
+Choose the color, diameter (6–96 logical pixels), whether to hide the mouse
+cursor, and how long the dot stays visible after movement stops. Hold the
+Spotlight pointer button and move the presenter to control the dot.
 
-| Presenter | Connection | Device ID |
-| --- | --- | --- |
-| Logitech Spotlight | USB receiver / Bluetooth | `046d:c53e` / `046d:b503` |
-| Logitech Spotlight 2 | Logi Bolt USB-C receiver / Bluetooth | `046d:c548` / `046d:b506` |
-| Lenovo ThinkPad X1 Presenter Mouse | USB / Bluetooth | `17ef:60d9` / `17ef:60db` |
-| AVATTO H100 / August WP200 | USB | `0c45:8101` |
-| August LP315 | USB | `2312:863d` |
-| AVATTO i10 Pro | USB | `2571:4109` |
-| August LP310 | USB | `69a7:9803` |
-| Norwii Wireless Presenter | USB | `3243:0122` |
-| Norwii N95s BLE Presenter | USB receiver / Bluetooth | `3243:0382` / `3243:03a2` |
-| Kensington PowerPointer | USB | `1ea7:0002` |
+The idle duration starts at the **last movement**, because this device path
+does not expose a reliable pointer-button release event. Holding the button
+still does not prevent the idle timeout. Fullscreen direct scanout is paused
+while the dot is visible and restored when it disappears.
 
-Projecteur can also accept an additional device at runtime with
-`--additional-device VENDOR:PRODUCT`. See `projecteur --help` for details.
+## Let an AI assistant help
 
-## Need help?
+This repository includes [AGENTS.md](AGENTS.md) with installation,
+configuration, troubleshooting, and validation instructions for AI assistants
+with access to your Linux computer. You can copy this prompt:
 
-- **Presenter not detected?** Run `projecteur --device-scan`. A detected device
-  that is not readable or writable usually means the udev rules are missing or
-  stale.
-- **Zoom not working?** Confirm that Projecteur is installed—not run only from
-  the build directory—and that the session is KDE Plasma on Wayland.
-- **Applet missing?** Check that Projecteur is running and enabled in the Plasma
-  system tray configuration.
+> Read README.md and AGENTS.md in this repository. Check whether my system is
+> Ubuntu 26.04 with GNOME 50 on Wayland, then help me install and configure
+> Projecteur GNOME for my Logitech Spotlight. Preserve existing settings,
+> explain any administrator access needed, and do not log me out or reboot.
+> After I log in again, check the service and extension, then guide me through
+> testing the pointer, cursor hiding, fullscreen presentations, and slide
+> navigation.
 
-The [troubleshooting guide](./doc/TROUBLESHOOTING.md) has detailed checks. If the
-problem remains, [open an issue](https://github.com/gbin/Projecteur/issues)
-with the output of `projecteur --fullversion` and `projecteur --device-scan`.
+An assistant that only has chat access can explain the steps; installation
+requires access to your computer. Enter any administrator password only in
+Ubuntu's normal password prompt.
 
-## Documentation
+## Remove
 
-- [User guide](./doc/USER-GUIDE.md) — presets, zoom modes, button mapping,
-  shortcuts, timers, and device-free use
-- [Troubleshooting](./doc/TROUBLESHOOTING.md) — display, zoom, device access, and
-  system tray diagnostics
-- [Changelog](./doc/CHANGELOG.md)
-- [Contributing and development setup](./CONTRIBUTING.md)
-- Command-line reference: `man projecteur`
+```sh
+./uninstall.sh
+```
 
-## About Projecteur
+This removes the user service, daemon, and extension. Saved preferences and
+the system udev permission rules are retained.
 
-Projecteur was created by Jahn Fuchs and transferred to Guillaume Binet in 2026.
-The current development line adds a native Plasma 6 experience, a
-Wayland-native overlay and live zoom pipeline, and Logitech Spotlight 2 support.
-Please report problems in the [Projecteur issue tracker](https://github.com/gbin/Projecteur/issues).
+## Troubleshooting
 
-## License
+Check extension and service status:
 
-Projecteur is available under the [MIT License](./LICENSE.md).
+```sh
+gnome-extensions info projecteur-pointer-ubuntu26@projecteur.github.io
+systemctl --user status projecteur-gnome-daemon.service
+journalctl --user -b -u projecteur-gnome-daemon.service --no-pager
+```
 
-Copyright © 2018–2021 Jahn Fuchs. Current development copyright © 2026
-Guillaume Binet and Projecteur contributors.
+If an update appears unchanged, log out and back in to reload GNOME's extension
+code. If the presenter is missing, reconnect it and check the daemon log.
+Detailed build and test instructions are in [gnome/README.md](gnome/README.md).
+
+## Attribution and license
+
+Based on [Projecteur](https://github.com/gbin/Projecteur), created by Jahn Fuchs
+and maintained upstream by Guillaume Binet and contributors. This fork adds
+the GNOME daemon, Shell overlay, pointer preferences, and local installation
+workflow. It is an independent community adaptation.
+
+The MIT license and original copyright notice are preserved in
+[LICENSE.md](LICENSE.md). The upstream KDE implementation remains in the source
+tree; follow the upstream documentation if you want to build that path.

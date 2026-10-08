@@ -15,6 +15,7 @@ env:
 
 jobs:
   validate:
+    if: github.repository == 'gbin/Projecteur'
     name: validate-release-ref
     runs-on: ubuntu-latest
     permissions:

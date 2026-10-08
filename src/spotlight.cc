@@ -8,14 +8,18 @@
 #include "projecteur_device_debug.h"
 #include "projecteur_hid_debug.h"
 #include "projecteur_input_debug.h"
-#include "settings.h"
 #include "virtualdevice.h"
+
+#ifdef PROJECTEUR_WITH_SETTINGS
+#include "settings.h"
+#endif
 
 #include <QElapsedTimer>
 #include <QSocketNotifier>
 #include <QTimer>
 #include <QVarLengthArray>
 
+#include <algorithm>
 #include <cmath>
 #include <fcntl.h>
 #include <sys/inotify.h>
@@ -87,9 +91,9 @@ Spotlight::Spotlight(QObject* parent, Options options, Settings* settings)
   , m_settings(settings)
   , m_holdButtonStatus(std::make_unique<HoldButtonStatus>())
 {
-  constexpr int spotlightActiveTimoutMs = 600;
   m_activeTimer->setSingleShot(true);
-  m_activeTimer->setInterval(spotlightActiveTimoutMs);
+  m_activeTimeoutMs = std::max(0, m_options.activeTimeoutMs);
+  m_activeTimer->setInterval(m_activeTimeoutMs);
 
   connect(m_activeTimer, &QTimer::timeout, this, [this](){
     setSpotActive(false);
@@ -148,6 +152,27 @@ uint32_t Spotlight::connectedDeviceCount() const
 }
 
 // -------------------------------------------------------------------------------------------------
+void Spotlight::setActiveTimeoutMs(int timeoutMs)
+{
+  const bool running = m_activeTimer->isActive();
+  const qint64 elapsed = running && m_pointerActivityTimer.isValid()
+    ? m_pointerActivityTimer.elapsed() : 0;
+  m_activeTimeoutMs = std::max(0, timeoutMs);
+  m_activeTimer->setInterval(m_activeTimeoutMs);
+  if (running) {
+    // Apply a changed preference to the current idle period, preserving the
+    // time already spent waiting since the last presenter movement.
+    m_activeTimer->start(static_cast<int>(
+      std::max<qint64>(1, m_activeTimeoutMs - elapsed)));
+  }
+}
+
+void Spotlight::restartActiveTimeout()
+{
+  m_pointerActivityTimer.start();
+  m_activeTimer->start(m_activeTimeoutMs);
+}
+
 void Spotlight::setSpotActive(bool active)
 {
   if (m_spotActive == active) { return; }
@@ -270,6 +295,7 @@ int Spotlight::connectDevices()
         // Load Input mapping settings when first sub-device gets added.
         const auto im = dc->inputMapper().get();
 
+#ifdef PROJECTEUR_WITH_SETTINGS
         im->setKeyEventInterval(m_settings->deviceInputSeqInterval(dev.id));
         im->setConfiguration(m_settings->getDeviceInputMapConfig(dev.id));
 
@@ -328,6 +354,11 @@ int Spotlight::connectDevices()
         connect(m_settings, &Settings::presetLoaded, this, [](const QString& preset){
           lastPreset = preset;
         });
+#else
+        // The GNOME bridge deliberately has no settings UI. With an empty map,
+        // InputMapper forwards presenter buttons to its uinput devices unchanged.
+        im->setKeyEventInterval(250);
+#endif
       }
 
       dc->addSubDevice(std::move(subDeviceConnection));
@@ -442,7 +473,17 @@ void Spotlight::onEventDataAvailable(int fd, SubEventConnection& connection)
           setSpotActive(true);
         }
 
-        m_activeTimer->start();
+        restartActiveTimeout();
+        int deltaX = 0;
+        int deltaY = 0;
+        for (size_t i = 0; i < buf.pos(); ++i) {
+          if (buf[i].type != EV_REL) { continue; }
+          if (buf[i].code == REL_X) { deltaX += buf[i].value; }
+          if (buf[i].code == REL_Y) { deltaY += buf[i].value; }
+        }
+        if (deltaX != 0 || deltaY != 0) {
+          emit pointerMotion(deltaX, deltaY);
+        }
         if (m_virtualMouseDevice) {
           // forward events to virtual mouse device
           m_virtualMouseDevice->emitEvents(buf.data(), buf.pos());

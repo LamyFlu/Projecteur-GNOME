@@ -21,6 +21,7 @@ env:
 
 jobs:
   build:
+    if: github.repository == 'gbin/Projecteur'
     name: ${{ matrix.id }}
     runs-on: ubuntu-latest
     continue-on-error: ${{ matrix.moving && github.base_ref != 'master' && github.ref_name != 'master' }}

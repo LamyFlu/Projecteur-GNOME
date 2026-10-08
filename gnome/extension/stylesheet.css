@@ -1,0 +1,8 @@
+.projecteur-pointer-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background-color: rgba(255, 24, 24, 0.96);
+    border: 2px solid rgba(255, 220, 220, 0.95);
+    box-shadow: 0 0 8px 4px rgba(255, 0, 0, 0.75);
+}

@@ -1,0 +1,8 @@
+{
+  "uuid": "projecteur-pointer-ubuntu26@projecteur.github.io",
+  "name": "Projecteur Pointer for Ubuntu 26.04",
+  "description": "Shows Logitech Spotlight movement as a laser dot on GNOME Wayland.",
+  "shell-version": ["50"],
+  "settings-schema": "org.gnome.shell.extensions.projecteur-pointer",
+  "version": 7
+}

@@ -1,0 +1,13 @@
+[Unit]
+Description=Projecteur Logitech Spotlight bridge for GNOME
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=@DAEMON_PATH@
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

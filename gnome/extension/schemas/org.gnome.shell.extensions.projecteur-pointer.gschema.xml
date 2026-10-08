@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.projecteur-pointer" path="/org/gnome/shell/extensions/projecteur-pointer/">
+    <key name="dot-color" type="s">
+      <default>'rgb(255,24,24)'</default>
+      <summary>Laser dot color</summary>
+    </key>
+    <key name="dot-size" type="i">
+      <range min="6" max="96"/>
+      <default>18</default>
+      <summary>Laser dot diameter in logical pixels</summary>
+    </key>
+    <key name="hide-system-cursor" type="b">
+      <default>true</default>
+      <summary>Hide the system cursor while the laser dot is visible</summary>
+    </key>
+    <key name="linger-seconds" type="d">
+      <range min="0.1" max="30.0"/>
+      <default>3.0</default>
+      <summary>Seconds to keep the laser dot after the last presenter motion</summary>
+    </key>
+  </schema>
+</schemalist>

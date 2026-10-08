@@ -5,7 +5,6 @@
 
 #include "enum-helper.h"
 #include "projecteur_input_debug.h"
-#include "settings.h"
 #include "virtualdevice.h"
 
 #include <KLocalizedString>
@@ -19,6 +18,9 @@
 #include <linux/input.h>
 
 namespace  {
+  constexpr int minimumKeyEventIntervalMs = 100;
+  constexpr int maximumKeyEventIntervalMs = 950;
+
   const auto registeredMetaTypes_ = qRegisterMetaType<KeyEventSequence>()
                                     && qRegisterMetaType<MappedAction>();
 
@@ -798,8 +800,8 @@ int InputMapper::keyEventInterval() const
 // -------------------------------------------------------------------------------------------------
 void InputMapper::setKeyEventInterval(int interval)
 {
-  impl->m_seqTimer->setInterval(std::min(Settings::inputSequenceIntervalRange().max,
-                                std::max(Settings::inputSequenceIntervalRange().min, interval)));
+  impl->m_seqTimer->setInterval(std::min(maximumKeyEventIntervalMs,
+                                std::max(minimumKeyEventIntervalMs, interval)));
 }
 
 // -------------------------------------------------------------------------------------------------

@@ -6,3 +6,7 @@ CMakeLists.txt.user*
 /build/*
 /release-assets/
 icons/icon-font/output/
+
+# Local preparation artifacts and unrelated personal installation bundles
+/PU-Ubuntu-AI-安裝包-20260924/
+/gnome/extension/schemas/gschemas.compiled

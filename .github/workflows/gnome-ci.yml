@@ -1,0 +1,36 @@
+name: GNOME checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gnome:
+    runs-on: ubuntu-latest
+    container: ubuntu:26.04
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      LC_ALL: C.UTF-8
+    steps:
+      - name: Install build and test dependencies
+        run: |
+          apt-get update
+          apt-get install -y git build-essential cmake extra-cmake-modules qt6-base-dev libkf6coreaddons-dev libkf6i18n-dev libglib2.0-bin gjs python3 dbus
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Validate scripts, schemas, and language selection
+        run: |
+          bash -n install.sh uninstall.sh gnome/install-local.sh gnome/uninstall-local.sh gnome/tests/dbus-smoke.sh
+          glib-compile-schemas --strict --dry-run gnome/extension/schemas
+          gjs -m gnome/tests/i18n-check.js
+      - name: Build the GNOME daemon
+        run: |
+          cmake -S gnome -B build/gnome -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/gnome --parallel 4
+      - name: Check D-Bus and idle timeout
+        run: |
+          dbus-run-session -- gnome/tests/dbus-smoke.sh ./build/gnome/projecteur-gnome-daemon
+          dbus-run-session -- python3 gnome/tests/linger-smoke.py ./build/gnome/projecteur-gnome-daemon
