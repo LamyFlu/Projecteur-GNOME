@@ -41,6 +41,10 @@ compilation, device permissions, the user service, and extension enablement.
 It may request your administrator password for missing packages or device
 permissions. The daemon and extension are installed in your user account.
 
+**The GNOME extension is included.** You do not need to install it separately
+from the GNOME Extensions website. The background service reads the presenter;
+the extension displays the dot and provides the preferences window.
+
 **Reconnect the presenter, then log out and back in.** The extension will be
 enabled automatically; no second installation command is needed. Updates use
 this same command and preserve your saved preferences.
@@ -56,11 +60,28 @@ Other distributions and GNOME versions have not been validated.
 
 ## Configure
 
-Open **Extensions → Projecteur Pointer for Ubuntu 26.04 → Settings**, or run:
+1. After installation and logging back in, search for **Extensions** in the
+   application overview.
+2. Find **Projecteur Pointer for Ubuntu 26.04** and make sure it is enabled.
+3. Click its settings button to open the pointer preferences.
+
+If the Extensions management app is not installed, or you prefer to open
+preferences directly, run this command in a terminal. No additional management
+app is required:
 
 ```sh
 gnome-extensions prefs projecteur-pointer-ubuntu26@projecteur.github.io
 ```
+
+Preferences captured on a local Traditional Chinese desktop:
+
+<img src="doc/gnome-pointer-preferences.zh-TW.png" alt="Projecteur preferences with color, size, mouse cursor hiding, and linger duration controls" width="640">
+
+From top to bottom: color, size, mouse cursor hiding, linger duration, and reset
+appearance. Click the color swatch, use `−` / `+` for numeric values, and use the
+switch for cursor hiding. Changes are saved and applied immediately. The purple
+color, 30-pixel diameter, and 3-second duration are example preferences.
+On non-Chinese systems, these controls appear in English.
 
 Choose the color, diameter (6–96 logical pixels), whether to hide the mouse
 cursor, and how long the dot stays visible after movement stops. Hold the
