@@ -32,6 +32,8 @@ public:
     bool enableUInput = true; // enable virtual uinput device
     std::vector<SupportedDevice> additionalDevices;
     int activeTimeoutMs = 600;
+    bool enableDeviceScan = true;
+    bool enablePointerClicks = true;
   };
 
   explicit Spotlight(QObject* parent, Options options, Settings* settings);
@@ -41,6 +43,9 @@ public:
   void setSpotActive(bool active);
   void setActiveTimeoutMs(int timeoutMs);
   void restartActiveTimeout();
+  void setPointerDoubleClickEnabled(bool enabled);
+  void setPointerClicksEnabled(bool enabled);
+  bool pointerClicksEnabled() const { return m_pointerClicksEnabled; }
 
   struct ConnectedDeviceInfo {
     DeviceId id;
@@ -62,6 +67,7 @@ signals:
   void spotActiveChanged(bool isActive);
   void pointerMotion(int deltaX, int deltaY);
   void slideNavigationPressed();
+  void pointerDoubleClicked();
 
 private:
   enum class ConnectionResult { CouldNotOpen, NotASpotlightDevice, Connected };
@@ -69,6 +75,7 @@ private:
 
   bool addInputEventHandler(std::shared_ptr<SubEventConnection> connection);
   void registerForNotifications(SubHidppConnection* connection);
+  void configurePointerDoubleClick(SubHidppConnection* connection);
 
   bool setupDevEventInotify();
   int connectDevices();
@@ -85,6 +92,9 @@ private:
   QTimer* m_connectionTimer = nullptr;
   QTimer* m_holdMoveEventTimer = nullptr;
   bool m_spotActive = false;
+  bool m_pointerDoubleClickEnabled = false;
+  bool m_pointerClicksEnabled = true;
+  std::map<QString, bool> m_forwardedPointerPresses;
   std::shared_ptr<VirtualDevice> m_virtualMouseDevice;
   std::shared_ptr<VirtualDevice> m_virtualKeyDevice;
   Settings* m_settings = nullptr;

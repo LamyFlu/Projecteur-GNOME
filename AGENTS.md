@@ -27,9 +27,18 @@ on Wayland. The user-facing entry points are `install.sh`, `uninstall.sh`,
 5. Open preferences with `gnome-extensions prefs
    projecteur-pointer-ubuntu26@projecteur.github.io`. Offer color, diameter
    (6–96 logical pixels), system-cursor hiding, and linger time (0.1–30 seconds).
+   Also offer laser/spotlight/magnifier selection, per-effect enablement,
+   spotlight diameter/dimming, lens diameter/zoom, and optional native double
+   click switching (off by default, original Spotlight only). Presenter left
+   mouse click forwarding is separately optional and off by default. Spotlight
+   and magnifier each have an appearance reset that preserves mode/enablement.
+   Fresh installs enable only the laser dot; upgrades preserve toggle values.
+   All effects can be disabled; show a disabled selector prompt and restore
+   the cursor when none are enabled.
    The timeout starts at the last presenter movement, not the physical button
    release. Chinese locales use Traditional Chinese; other locales use English.
-6. Ask the user to test pointer movement, previous/next slide, fullscreen
+6. Ask the user to test all three effects, optional double-click switching,
+   pointer movement, previous/next slide, fullscreen
    visibility, cursor restoration, and their preferred linger time. A service
    check or automated test cannot prove the visual behavior on their display.
 
@@ -40,7 +49,8 @@ on Wayland. The user-facing entry points are `install.sh`, `uninstall.sh`,
 - Never use blanket `chmod 666` on input devices, grant access to all input
   devices, or run the daemon as root as a shortcut.
 - Test only one copy of the daemon on the normal session bus. Use
-  `dbus-run-session` for automated tests. On a connected device, ask the user
+  `dbus-run-session` with `--disable-uinput --no-device-scan` for synthetic
+  automated tests. On a connected device, ask the user
   to leave the presenter idle during automated device tests.
 - To show a temporary test dot, use `SetActiveForTesting true` on
   `org.projecteur.Gnome.Pointer`, then always call it with `false` afterward.
@@ -52,6 +62,9 @@ on Wayland. The user-facing entry points are `install.sh`, `uninstall.sh`,
 - Preserve upstream attribution and the MIT notice in `LICENSE.md`.
 - Keep GNOME changes scoped to `gnome/` and the required shared device code.
   Do not claim that the fork supports untested desktop or presenter versions.
+- Keep the compatibility table in `gnome/DEVICE-SUPPORT.md` accurate. An
+  allowlisted or upstream-listed model is not hardware-verified on this fork.
+  Never send original Spotlight control `0xdf` reprogramming to other models.
 - Build: `cmake -S gnome -B build/gnome -DCMAKE_BUILD_TYPE=Release`, then
   `cmake --build build/gnome --parallel 4`.
 - Validate shell scripts with `bash -n`, schemas with

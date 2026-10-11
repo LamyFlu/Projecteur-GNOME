@@ -5,7 +5,12 @@ import Cogl from 'gi://Cogl';
 import Clutter from 'gi://Clutter';
 import St from 'gi://St';
 
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
+
+import {PointerEffects} from './pointer-effects.js';
+import {enabledModes, resolveMode, nextMode} from './pointer-state.js';
 
 const BUS_NAME = 'org.projecteur.Gnome';
 const OBJECT_PATH = '/org/projecteur/Gnome/Pointer';
@@ -13,6 +18,8 @@ const INTERFACE = 'org.projecteur.Gnome.Pointer';
 
 export default class ProjecteurPointerExtension extends Extension {
     enable() {
+        this._active = false;
+        this._effects = new PointerEffects();
         this._unredirectDisabled = false;
         this._cursorTracker = global.backend.get_cursor_tracker();
         this._seat = Clutter.get_default_backend().get_default_seat();
@@ -35,9 +42,14 @@ export default class ProjecteurPointerExtension extends Extension {
         this._settingsChanged = this._settings.connect('changed', (_settings, key) => {
             this._updateAppearance();
             this._updateCursorVisibility();
+            if (['pointer-mode', 'laser-enabled', 'spotlight-enabled', 'magnifier-enabled'].includes(key))
+                this._setActive(this._active);
             if (key === 'linger-seconds') this._syncLingerSeconds();
+            if (key === 'double-click-switch') this._syncDoubleClick();
+            if (key === 'pointer-clicks-enabled') this._syncPointerClicks();
         });
         this._updateAppearance();
+        this._monitorChanged = Main.layoutManager.connect('monitors-changed', () => this._updatePosition());
 
         const [x, y] = global.get_pointer();
         this._pointerX = x;
@@ -69,12 +81,22 @@ export default class ProjecteurPointerExtension extends Extension {
                 this._handleMotion(deltaX, deltaY);
             });
 
+        this._doubleClickSubscription = Gio.DBus.session.signal_subscribe(
+            BUS_NAME, INTERFACE, 'PointerDoubleClicked', OBJECT_PATH, null,
+            Gio.DBusSignalFlags.NONE, () => {
+                if (!this._settings?.get_boolean('double-click-switch')) return;
+                const mode = nextMode(this._mode(), this._modes());
+                if (mode) this._settings.set_string('pointer-mode', mode);
+            });
+
         this._nameWatch = Gio.bus_watch_name(
             Gio.BusType.SESSION,
             BUS_NAME,
             Gio.BusNameWatcherFlags.NONE,
             () => {
                 this._syncLingerSeconds();
+                this._syncDoubleClick();
+                this._syncPointerClicks();
                 this._syncActiveProperty();
             },
             () => this._setActive(false));
@@ -82,6 +104,14 @@ export default class ProjecteurPointerExtension extends Extension {
 
     disable() {
         this._setActive(false);
+        if (this._monitorChanged) {
+            Main.layoutManager.disconnect(this._monitorChanged);
+            this._monitorChanged = 0;
+        }
+        this._syncDoubleClick(false);
+        this._syncPointerClicks(false);
+        this._effects?.destroy();
+        this._effects = null;
         this._cursorTracker = null;
         this._seat = null;
 
@@ -98,6 +128,10 @@ export default class ProjecteurPointerExtension extends Extension {
         if (this._motionSubscription) {
             Gio.DBus.session.signal_unsubscribe(this._motionSubscription);
             this._motionSubscription = 0;
+        }
+        if (this._doubleClickSubscription) {
+            Gio.DBus.session.signal_unsubscribe(this._doubleClickSubscription);
+            this._doubleClickSubscription = 0;
         }
         if (this._nameWatch) {
             Gio.bus_unwatch_name(this._nameWatch);
@@ -133,9 +167,11 @@ export default class ProjecteurPointerExtension extends Extension {
     _setActive(active) {
         if (!this._dot) return;
 
-        this._dot.visible = active;
+        this._active = active;
+        this._dot.visible = active && this._mode() === 'laser';
+        this._updatePosition();
         this._updateCursorVisibility();
-        if (active) {
+        if (active && this._mode() !== null) {
             this._disableUnredirect();
             this._syncSystemPointer(true);
             global.stage.set_child_above_sibling(this._dot, null);
@@ -149,6 +185,7 @@ export default class ProjecteurPointerExtension extends Extension {
                     });
             }
         } else {
+            this._effects.update(false, 'laser', 0, 0, this._settings);
             if (this._positionTimer) {
                 GLib.source_remove(this._positionTimer);
                 this._positionTimer = 0;
@@ -158,7 +195,7 @@ export default class ProjecteurPointerExtension extends Extension {
     }
 
     _updateCursorVisibility() {
-        const hide = this._dot?.visible &&
+        const hide = this._active && this._mode() !== null &&
             this._settings.get_boolean('hide-system-cursor');
         // Mutter counts visibility inhibitors. Acquire once and release only
         // our own inhibitor so other extensions keep control of theirs.
@@ -202,7 +239,7 @@ export default class ProjecteurPointerExtension extends Extension {
     }
 
     _handleMotion(deltaX, deltaY) {
-        if (!this._dot?.visible) return;
+        if (!this._active || !this._settings) return;
 
         const [systemX, systemY] = global.get_pointer();
         if (systemX !== this._systemPointerX || systemY !== this._systemPointerY) {
@@ -222,7 +259,7 @@ export default class ProjecteurPointerExtension extends Extension {
     }
 
     _syncSystemPointer(force) {
-        if (!this._dot?.visible) return;
+        if (!this._active || !this._settings) return;
 
         const [systemX, systemY] = global.get_pointer();
         if (force || systemX !== this._systemPointerX || systemY !== this._systemPointerY) {
@@ -235,15 +272,45 @@ export default class ProjecteurPointerExtension extends Extension {
     }
 
     _updatePosition() {
-        if (!this._dot?.visible) return;
+        if (!this._active || !this._settings) return;
 
+        this._dot.visible = this._mode() === 'laser';
         const size = this._dotSize;
-        this._pointerX = Math.max(0, Math.min(global.stage.width, this._pointerX));
-        this._pointerY = Math.max(0, Math.min(global.stage.height, this._pointerY));
+        this._pointerX = Math.max(0, Math.min(global.stage.width - 1, this._pointerX));
+        this._pointerY = Math.max(0, Math.min(global.stage.height - 1, this._pointerY));
         this._dot.set_position(
             Math.round(this._pointerX - size / 2),
             Math.round(this._pointerY - size / 2));
         global.stage.set_child_above_sibling(this._dot, null);
+        this._effects.update(this._mode() !== null, this._mode(), this._pointerX, this._pointerY, this._settings);
+    }
+
+    _modes() {
+        return enabledModes(this._settings.get_boolean('laser-enabled'),
+            this._settings.get_boolean('spotlight-enabled'),
+            this._settings.get_boolean('magnifier-enabled'));
+    }
+
+    _mode() {
+        return resolveMode(this._settings.get_string('pointer-mode'), this._modes());
+    }
+
+    _syncPointerClicks(enabled = this._settings.get_boolean('pointer-clicks-enabled')) {
+        Gio.DBus.session.call(BUS_NAME, OBJECT_PATH, INTERFACE,
+            'SetPointerClicksEnabled', new GLib.Variant('(b)', [enabled]),
+            null, Gio.DBusCallFlags.NONE, -1, null, (connection, result) => {
+                try { connection.call_finish(result); }
+                catch (error) { console.warn(`Projecteur pointer clicks: ${error.message}`); }
+            });
+    }
+
+    _syncDoubleClick(enabled = this._settings.get_boolean('double-click-switch')) {
+        Gio.DBus.session.call(BUS_NAME, OBJECT_PATH, INTERFACE,
+            'SetPointerDoubleClickEnabled', new GLib.Variant('(b)', [enabled]),
+            null, Gio.DBusCallFlags.NONE, -1, null, (connection, result) => {
+                try { connection.call_finish(result); }
+                catch (error) { console.warn(`Projecteur double click: ${error.message}`); }
+            });
     }
 
     _syncLingerSeconds() {

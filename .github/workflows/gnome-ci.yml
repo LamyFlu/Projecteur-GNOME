@@ -26,10 +26,14 @@ jobs:
           bash -n install.sh uninstall.sh gnome/install-local.sh gnome/uninstall-local.sh gnome/tests/dbus-smoke.sh
           glib-compile-schemas --strict --dry-run gnome/extension/schemas
           gjs -m gnome/tests/i18n-check.js
+          gjs -m gnome/tests/pointer-state-check.js
+          c++ -std=c++17 -Wall -Wextra -Werror -I src gnome/tests/pointer-frame-check.cc -o /tmp/projecteur-pointer-frame-check
+          /tmp/projecteur-pointer-frame-check
       - name: Build the GNOME daemon
         run: |
           cmake -S gnome -B build/gnome -DCMAKE_BUILD_TYPE=Release
           cmake --build build/gnome --parallel 4
+          python3 gnome/tests/device-table-check.py build/gnome
       - name: Check D-Bus and idle timeout
         run: |
           dbus-run-session -- gnome/tests/dbus-smoke.sh ./build/gnome/projecteur-gnome-daemon

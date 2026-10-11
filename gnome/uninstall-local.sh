@@ -28,6 +28,11 @@ settings.set_strv("enabled-extensions", settings.get_strv("enabled-extensions")
     .filter(uuid => uuid !== "projecteur-pointer-ubuntu26@projecteur.github.io"));
 imports.gi.Gio.Settings.sync();'
 fi
+# Restore the hardware double-click mapping before stopping a new daemon.
+# Older installed versions do not have this method.
+gdbus call --session --dest org.projecteur.Gnome \
+  --object-path /org/projecteur/Gnome/Pointer \
+  --method org.projecteur.Gnome.Pointer.SetPointerDoubleClickEnabled false >/dev/null 2>&1 || true
 systemctl --user disable --now projecteur-gnome-daemon.service 2>/dev/null || true
 
 for path in \

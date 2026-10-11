@@ -7,7 +7,8 @@ AI assistant instructions: [AGENTS.md](../AGENTS.md).
 
 `projecteur-gnome-daemon` reuses Projecteur's device scanning, HID++, evdev,
 input forwarding, and uinput code. The Shell extension renders a non-interactive
-laser dot above fullscreen windows. The service uses:
+laser dot, circular spotlight, or circular live magnifier above fullscreen
+windows. The service uses:
 
 ```text
 Service:   org.projecteur.Gnome
@@ -15,8 +16,9 @@ Object:    /org/projecteur/Gnome/Pointer
 Interface: org.projecteur.Gnome.Pointer
 ```
 
-Signals include `ActiveChanged`, `Motion`, `DeviceConnectedChanged`, and
-`SlideNavigationPressed`. `SetLingerSeconds(double)` adjusts the device timeout
+Signals include `ActiveChanged`, `Motion`, `DeviceConnectedChanged`,
+`SlideNavigationPressed`, and `PointerDoubleClicked`.
+`SetLingerSeconds(double)` adjusts the device timeout
 and rejects values outside 0.1–30 seconds. Preferences sync on connection and
 when changed, so a daemon restart restores the saved duration.
 
@@ -28,6 +30,26 @@ to update the cursor renderer even while hiding the cursor.
 Some fullscreen programs lock the system pointer. The overlay normally uses
 Mutter's pointer position, and falls back to relative presenter motion when
 that position does not move.
+
+The spotlight uses a Cairo even-odd mask. The magnifier clones `Main.uiGroup`
+into a circular shader mask outside that group, avoiding recursive feedback.
+It does not modify `Main.magnifier` or accessibility settings. Mode choices,
+per-effect enablement, spotlight diameter/dimming, lens diameter/zoom, and
+optional double-click switching live in the extension schema. Native double
+clicks use original Spotlight's documented HID++ `0xdf` control; the option
+restores normal device mapping when turned off. No model-specific command is
+sent to Spotlight 2 or other presenters. See [device status](DEVICE-SUPPORT.md).
+
+`SetPointerClicksEnabled(bool)` controls presenter `BTN_LEFT` forwarding,
+which defaults to disabled in GNOME. Disabling it releases any forwarded press
+so the virtual left button cannot remain held. Releases without a forwarded
+press are suppressed. Keyboard/slide events and pointer motion are unaffected.
+Upstream KDE builds retain their existing forwarding path.
+Spotlight/magnifier reset buttons reset only their appearance keys.
+
+`SetPointerDoubleClickEnabled(bool)` configures that control;
+`DoubleClickForTesting()` emits a double-click signal only while the option is
+on. `--no-device-scan --disable-uinput` isolates synthetic tests from hardware.
 
 ## Manual build
 
@@ -48,13 +70,29 @@ Ubuntu 26.04 desktop installation; it also installs device permission rules.
 bash -n install.sh uninstall.sh gnome/install-local.sh gnome/uninstall-local.sh
 glib-compile-schemas --strict --dry-run gnome/extension/schemas
 gjs -m gnome/tests/i18n-check.js
+gjs -m gnome/tests/pointer-state-check.js
+c++ -std=c++17 -Wall -Wextra -Werror -I src gnome/tests/pointer-frame-check.cc -o /tmp/projecteur-pointer-frame-check
+/tmp/projecteur-pointer-frame-check
+python3 gnome/tests/device-table-check.py build/gnome
 dbus-run-session -- gnome/tests/dbus-smoke.sh ./build/gnome/projecteur-gnome-daemon
 dbus-run-session -- python3 gnome/tests/linger-smoke.py ./build/gnome/projecteur-gnome-daemon
 ```
 
-Leave a connected presenter idle during the private-bus tests; they disable
-virtual input but still scan hardware. Automated tests do not replace a visual
-check in the user's desktop session. GNOME CI builds in an Ubuntu 26.04 container
+The private-bus tests disable virtual input and hardware scanning. Automated
+tests do not replace a visual check in the user's desktop session.
+An optional integration test uses a separate headless GNOME Shell session,
+temporary settings and a private D-Bus, so it does not restart or enable unsafe
+mode on the user's running Shell:
+
+```sh
+python3 gnome/tests/shell-effects-smoke.py build/gnome/projecteur-gnome-daemon
+```
+
+It requires GNOME 50 and a working EGL renderer; it is not run in the minimal
+CI container. It checks real effect rendering, D-Bus switching, disabled effects,
+cursor/focus cleanup, and the native GTK preferences window. To retain local
+screenshots for review, set `PROJECTEUR_TEST_ARTIFACTS` to an ignored directory
+such as `build/gnome/visual-check`. GNOME CI builds in an Ubuntu 26.04 container
 and runs these checks; the inherited Plasma workflows run only in the upstream
 repository.
 

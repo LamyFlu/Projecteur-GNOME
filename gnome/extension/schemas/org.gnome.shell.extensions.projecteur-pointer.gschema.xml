@@ -19,5 +19,41 @@
       <default>3.0</default>
       <summary>Seconds to keep the laser dot after the last presenter motion</summary>
     </key>
+    <key name="pointer-mode" type="s">
+      <choices><choice value="laser"/><choice value="spotlight"/><choice value="magnifier"/></choices>
+      <default>'laser'</default>
+      <summary>Selected presenter effect</summary>
+    </key>
+    <key name="spotlight-enabled" type="b">
+      <default>false</default><summary>Include spotlight in the available modes</summary>
+    </key>
+    <key name="magnifier-enabled" type="b">
+      <default>false</default><summary>Include magnifier in the available modes</summary>
+    </key>
+    <key name="double-click-switch" type="b">
+      <default>false</default><summary>Switch effects on a presenter pointer double click</summary>
+    </key>
+    <key name="spotlight-size" type="i">
+      <range min="80" max="1200"/><default>300</default>
+      <summary>Spotlight diameter in logical pixels</summary>
+    </key>
+    <key name="spotlight-dim" type="d">
+      <range min="0.1" max="0.9"/><default>0.65</default>
+      <summary>Darkening opacity outside the spotlight</summary>
+    </key>
+    <key name="magnifier-size" type="i">
+      <range min="80" max="1200"/><default>300</default>
+      <summary>Magnifier diameter in logical pixels</summary>
+    </key>
+    <key name="magnifier-factor" type="d">
+      <range min="1.1" max="8.0"/><default>2.0</default>
+      <summary>Magnification factor</summary>
+    </key>
+    <key name="pointer-clicks-enabled" type="b">
+      <default>false</default><summary>Forward presenter left mouse clicks to applications</summary>
+    </key>
+    <key name="laser-enabled" type="b">
+      <default>true</default><summary>Include the laser dot in the available modes</summary>
+    </key>
   </schema>
 </schemalist>

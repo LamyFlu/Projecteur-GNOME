@@ -99,8 +99,25 @@ if systemctl --user is-active --quiet projecteur-gnome-daemon.service; then
   systemctl --user stop projecteur-gnome-daemon.service
 fi
 install -D -m 0755 "$build_dir/projecteur-gnome-daemon" "$daemon_path"
+# Preserve effective toggle values on upgrades before changing schema defaults.
+# First installs have no old schema and receive laser-only defaults.
+if [[ -f "$extension_dir/schemas/gschemas.compiled" ]]; then
+  gjs -c '
+const {Gio} = imports.gi;
+const source = Gio.SettingsSchemaSource.new_from_directory(ARGV[0],
+    Gio.SettingsSchemaSource.get_default(), false);
+const schema = source.lookup("org.gnome.shell.extensions.projecteur-pointer", false);
+if (schema) {
+    const settings = new Gio.Settings({settings_schema: schema});
+    for (const key of ["spotlight-enabled", "magnifier-enabled"]) {
+        if (schema.has_key(key) && settings.get_user_value(key) === null)
+            settings.set_boolean(key, settings.get_boolean(key));
+    }
+    Gio.Settings.sync();
+}' "$extension_dir/schemas"
+fi
 install -d "$extension_dir" "$extension_dir/schemas"
-for file in metadata.json extension.js prefs.js i18n.js stylesheet.css; do
+for file in metadata.json extension.js prefs.js i18n.js pointer-effects.js pointer-state.js stylesheet.css; do
   install -m 0644 "$script_dir/extension/$file" "$extension_dir/$file"
 done
 install -m 0644 "$script_dir/extension/schemas/"*.gschema.xml "$extension_dir/schemas/"

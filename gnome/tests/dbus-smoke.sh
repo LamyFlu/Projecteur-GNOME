@@ -6,7 +6,7 @@ service=org.projecteur.Gnome
 object=/org/projecteur/Gnome/Pointer
 interface=org.projecteur.Gnome.Pointer
 
-"$daemon" --disable-uinput &
+"$daemon" --disable-uinput --no-device-scan &
 daemon_pid=$!
 trap 'kill "$daemon_pid" 2>/dev/null || true; wait "$daemon_pid" 2>/dev/null || true' EXIT
 
@@ -34,5 +34,16 @@ gdbus call --session --dest "$service" --object-path "$object" \
 active="$(gdbus call --session --dest "$service" --object-path "$object" \
   --method org.freedesktop.DBus.Properties.Get "$interface" Active)"
 grep -q false <<<"$active"
+
+clicks="$(gdbus call --session --dest "$service" --object-path "$object" \
+  --method org.freedesktop.DBus.Properties.Get "$interface" PointerClicksEnabled)"
+grep -q false <<<"$clicks"
+gdbus call --session --dest "$service" --object-path "$object" \
+  --method "$interface.SetPointerClicksEnabled" true >/dev/null
+clicks="$(gdbus call --session --dest "$service" --object-path "$object" \
+  --method org.freedesktop.DBus.Properties.Get "$interface" PointerClicksEnabled)"
+grep -q true <<<"$clicks"
+gdbus call --session --dest "$service" --object-path "$object" \
+  --method "$interface.SetPointerClicksEnabled" false >/dev/null
 
 echo "D-Bus smoke test passed"

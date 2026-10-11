@@ -1,6 +1,6 @@
 # Projecteur GNOME
 
-A configurable laser dot for **Logitech Spotlight** on **Ubuntu 26.04,
+Laser dot, spotlight, and local magnification for **Logitech Spotlight** on **Ubuntu 26.04,
 GNOME Shell 50, and Wayland**.
 
 [繁體中文](README.zh-TW.md) · [Developer notes](gnome/README.md) ·
@@ -17,7 +17,9 @@ The purple dot on the display is the software pointer. The red arrow is an annot
 
 ## Features
 
-- Laser dot controlled by presenter movement.
+- Laser dot, spotlight, and circular magnifier controlled by presenter movement.
+- Adjustable spotlight/lens diameter (80–1200 logical pixels) and zoom (1.1–8 times).
+- Optional native double-click mode switching for original Spotlight, off by default.
 - Adjustable color and diameter, with matching border and glow.
 - Hide the system cursor while the dot is visible; restore it afterward.
 - Adjustable idle duration: 0.1–30 seconds, default 3 seconds.
@@ -91,6 +93,59 @@ The idle duration starts at the **last movement**, because this device path
 does not expose a reliable pointer-button release event. Holding the button
 still does not prevent the idle timeout. Fullscreen direct scanout is paused
 while the dot is visible and restored when it disappears.
+
+### Spotlight, magnification, and double-click switching
+
+Fresh installations enable only the laser dot; spotlight and magnifier start
+disabled. Upgrades preserve existing effect toggle values.
+
+Select **Presenter effects → Current effect** in preferences. Spotlight darkens
+surrounding content while leaving a circular bright area. Magnifier displays a
+live circular lens following the pointer; it does not change GNOME accessibility
+zoom settings.
+
+- **Spotlight**: enable or disable it, set its diameter (80–1200 logical pixels),
+  and adjust background dimming.
+- **Magnifier**: enable or disable it, set its diameter (80–1200 logical pixels),
+  and set magnification (1.1–8 times). The lens fits inside its current monitor.
+- **Double-click to switch effects**: opt in to cycle laser dot → spotlight →
+  magnifier → laser dot with the original Logitech Spotlight pointer button.
+  Disabled effects are skipped. This option is off by default; disabling it
+  restores the device's double-click mapping. Slide navigation retains its
+  existing behavior.
+
+- **Allow presenter mouse clicks**: off by default to avoid accidental pointer-button
+  clicks. When enabled, left mouse clicks are forwarded at the system cursor.
+  If double-click switching is enabled, native double clicks switch effects
+  rather than reaching the application. Ordinary mice are unaffected. In an
+  application that locks the system cursor, its click position can differ from
+  the visual effect's position.
+- **Reset spotlight appearance** restores a 300-pixel diameter and 0.65 dimming.
+- **Reset magnifier appearance** restores a 300-pixel diameter and 2.0 zoom.
+  Both reset buttons preserve effect enablement, the current mode, and click
+  and double-click options.
+
+All effects share cursor hiding and the movement idle timeout. The current-effect selector lists only
+enabled effects. The laser dot can also be disabled in its appearance group.
+With all three disabled, the selector shows a gray prompt to enable an effect
+and the system cursor is restored. The screenshot above shows the
+previous laser-only preferences; the new effect controls appear at the top.
+The user confirmed laser, spotlight, magnifier, native double-click switching,
+mouse clicks, and preferences on the original Spotlight USB device on 2026-10-11.
+
+## Other presenters
+
+This fork inherits upstream develop's device entries for AVATTO, August, Lenovo,
+Norwii, Kensington, and Microsoft Presenter+. Devices providing compatible
+relative mouse movement can try all three effects. **These additional devices
+have not been verified on this GNOME fork.**
+
+The original Spotlight USB laser dot and slide navigation have been tested.
+Spotlight Bluetooth, Spotlight 2, and other models are unverified. Native
+double-click switching currently applies only to original Spotlight; other
+presenters can select effects in preferences and do not receive Spotlight's
+model-specific reprogramming commands. See the
+[compatibility table](gnome/DEVICE-SUPPORT.md) for IDs and limitations.
 
 ## Let an AI assistant help
 

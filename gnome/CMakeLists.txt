@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(ProjecteurGnomeBridge VERSION 0.1.0 LANGUAGES CXX)
+project(ProjecteurGnomeBridge VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -59,8 +59,8 @@ set(lineRegex "^[ \t]*${idRegex}[ \t]*,[ \t]*${idRegex}[ \t]*,[ \t]*(usb|bt)[ \t
 file(STRINGS "${PROJECTEUR_ROOT}/devices.conf" CONFLINES REGEX "${lineRegex}")
 foreach(line ${CONFLINES})
   if(line MATCHES "${lineRegex}")
-    set(vendorId "${CMAKE_MATCH_1}")
-    set(productId "${CMAKE_MATCH_2}")
+    string(TOLOWER "${CMAKE_MATCH_1}" vendorId)
+    string(TOLOWER "${CMAKE_MATCH_2}" productId)
     set(deviceName "${CMAKE_MATCH_4}")
     if("${CMAKE_MATCH_3}" STREQUAL "bt")
       set(isBluetooth true)

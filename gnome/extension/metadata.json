@@ -4,5 +4,5 @@
   "description": "Shows Logitech Spotlight movement as a laser dot on GNOME Wayland.",
   "shell-version": ["50"],
   "settings-schema": "org.gnome.shell.extensions.projecteur-pointer",
-  "version": 7
+  "version": 10
 }

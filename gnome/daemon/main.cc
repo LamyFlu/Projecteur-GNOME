@@ -21,6 +21,7 @@ class PointerBridge final : public QObject
   Q_PROPERTY(bool Active READ active NOTIFY ActiveChanged)
   Q_PROPERTY(bool DeviceConnected READ deviceConnected NOTIFY DeviceConnectedChanged)
   Q_PROPERTY(double LingerSeconds READ lingerSeconds)
+  Q_PROPERTY(bool PointerClicksEnabled READ pointerClicksEnabled)
 
 public:
   explicit PointerBridge(Spotlight* spotlight, QObject* parent = nullptr)
@@ -34,11 +35,14 @@ public:
             this, &PointerBridge::setDeviceConnected);
     connect(m_spotlight, &Spotlight::slideNavigationPressed,
             this, &PointerBridge::SlideNavigationPressed);
+    connect(m_spotlight, &Spotlight::pointerDoubleClicked,
+            this, &PointerBridge::PointerDoubleClicked);
     m_deviceConnected = m_spotlight->anySpotlightDeviceConnected();
   }
 
   bool active() const { return m_active; }
   bool deviceConnected() const { return m_deviceConnected; }
+  bool pointerClicksEnabled() const { return m_spotlight->pointerClicksEnabled(); }
   double lingerSeconds() const { return m_lingerSeconds; }
 
 public slots:
@@ -52,6 +56,22 @@ public slots:
     m_lingerSeconds = seconds;
     m_spotlight->setActiveTimeoutMs(static_cast<int>(std::lround(seconds * 1000)));
     return true;
+  }
+
+  void SetPointerClicksEnabled(bool enabled)
+  {
+    m_spotlight->setPointerClicksEnabled(enabled);
+  }
+
+  void SetPointerDoubleClickEnabled(bool enabled)
+  {
+    m_doubleClickEnabled = enabled;
+    m_spotlight->setPointerDoubleClickEnabled(enabled);
+  }
+
+  void DoubleClickForTesting()
+  {
+    if (m_doubleClickEnabled) { emit PointerDoubleClicked(); }
   }
 
   void SetActiveForTesting(bool active)
@@ -73,6 +93,7 @@ signals:
   void Motion(int deltaX, int deltaY);
   void DeviceConnectedChanged(bool connected);
   void SlideNavigationPressed();
+  void PointerDoubleClicked();
 
 private slots:
   void setActive(bool active)
@@ -92,6 +113,7 @@ private slots:
 private:
   Spotlight* const m_spotlight;
   bool m_active = false;
+  bool m_doubleClickEnabled = false;
   bool m_deviceConnected = false;
   double m_lingerSeconds = 3.0;
 };
@@ -100,7 +122,7 @@ int main(int argc, char** argv)
 {
   QCoreApplication app(argc, argv);
   QCoreApplication::setApplicationName(QStringLiteral("projecteur-gnome-daemon"));
-  QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
+  QCoreApplication::setApplicationVersion(QStringLiteral("0.2.0"));
   KLocalizedString::setApplicationDomain("projecteur");
 
   QCommandLineParser parser;
@@ -112,12 +134,15 @@ int main(int argc, char** argv)
     QStringList{QStringLiteral("disable-uinput")},
     QStringLiteral("Do not create virtual mouse and keyboard devices."));
   parser.addOption(disableUInputOption);
+  QCommandLineOption noDeviceScanOption(QStringLiteral("no-device-scan"),
+    QStringLiteral("Do not open hardware devices (isolated automated tests)."));
+  parser.addOption(noDeviceScanOption);
   parser.process(app);
 
   const bool enableUInput = !parser.isSet(disableUInputOption);
   constexpr int pointerLingerMs = 3000;
   Spotlight spotlight(
-    &app, Spotlight::Options{enableUInput, {}, pointerLingerMs}, nullptr);
+    &app, Spotlight::Options{enableUInput, {}, pointerLingerMs, !parser.isSet(noDeviceScanOption), false}, nullptr);
   PointerBridge bridge(&spotlight);
 
   auto bus = QDBusConnection::sessionBus();

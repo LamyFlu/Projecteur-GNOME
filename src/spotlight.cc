@@ -2,6 +2,7 @@
 // - See LICENSE.md and README.md
 
 #include "spotlight.h"
+#include "pointerframe.h"
 
 #include "device-hidpp.h"
 #include "deviceinput.h"
@@ -91,6 +92,7 @@ Spotlight::Spotlight(QObject* parent, Options options, Settings* settings)
   , m_settings(settings)
   , m_holdButtonStatus(std::make_unique<HoldButtonStatus>())
 {
+  m_pointerClicksEnabled = m_options.enablePointerClicks;
   m_activeTimer->setSingleShot(true);
   m_activeTimeoutMs = std::max(0, m_options.activeTimeoutMs);
   m_activeTimer->setInterval(m_activeTimeoutMs);
@@ -125,8 +127,10 @@ Spotlight::Spotlight(QObject* parent, Options options, Settings* settings)
   m_holdMoveEventTimer->setInterval(30);
 
   // Try to find already attached device(s) and connect to it.
-  connectDevices();
-  setupDevEventInotify();
+  if (m_options.enableDeviceScan) {
+    connectDevices();
+    setupDevEventInotify();
+  }
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -386,6 +390,11 @@ int Spotlight::connectDevices()
 // -------------------------------------------------------------------------------------------------
 void Spotlight::removeDeviceConnection(const QString &devicePath)
 {
+  if (m_forwardedPointerPresses[devicePath] && m_virtualMouseDevice) {
+    const input_event release[] = {{{}, EV_KEY, BTN_LEFT, 0}, {{}, EV_SYN, SYN_REPORT, 0}};
+    m_virtualMouseDevice->emitEvents(release, 2);
+  }
+  m_forwardedPointerPresses.erase(devicePath);
   for (auto dc_it = m_deviceConnections.begin(); dc_it != m_deviceConnections.end(); )
   {
     if (!dc_it->second) {
@@ -451,9 +460,16 @@ void Spotlight::onEventDataAvailable(int fd, SubEventConnection& connection)
     if (ev.type == EV_SYN)
     {
       // Check for relative events -> set Spotlight active
-      const auto &first_ev = buf[0];
-      const bool isMouseMoveEvent = first_ev.type == EV_REL
-                                    && (first_ev.code == REL_X || first_ev.code == REL_Y);
+      const input_event* events = buf.data();
+      size_t count = buf.pos();
+#ifndef PROJECTEUR_WITH_SETTINGS
+      const auto filtered = filterPointerClicks(events, count, m_pointerClicksEnabled,
+        m_forwardedPointerPresses[connection.path()]);
+      events = filtered.data();
+      count = filtered.size();
+#endif
+      const auto frame = splitPointerFrame(events, count);
+      const bool isMouseMoveEvent = frame.x != 0 || frame.y != 0;
 
       if (isMouseMoveEvent)
       { // Skip input mapping for mouse move events completely
@@ -473,25 +489,19 @@ void Spotlight::onEventDataAvailable(int fd, SubEventConnection& connection)
           setSpotActive(true);
         }
 
-        restartActiveTimeout();
-        int deltaX = 0;
-        int deltaY = 0;
-        for (size_t i = 0; i < buf.pos(); ++i) {
-          if (buf[i].type != EV_REL) { continue; }
-          if (buf[i].code == REL_X) { deltaX += buf[i].value; }
-          if (buf[i].code == REL_Y) { deltaY += buf[i].value; }
-        }
-        if (deltaX != 0 || deltaY != 0) {
-          emit pointerMotion(deltaX, deltaY);
+        if (!suppressLeakedMove) {
+          restartActiveTimeout();
+          emit pointerMotion(frame.x, frame.y);
         }
         if (m_virtualMouseDevice) {
           // forward events to virtual mouse device
-          m_virtualMouseDevice->emitEvents(buf.data(), buf.pos());
+          m_virtualMouseDevice->emitEvents(frame.relative.data(), frame.relative.size());
         }
       }
-      else
-      { // Forward events to input mapper for the device
-        connection.inputMapper()->addEvents(buf.data(), buf.pos());
+      if (!isMouseMoveEvent) {
+        if (count > 1) { connection.inputMapper()->addEvents(events, count); }
+      } else if (frame.other.size() > 1) {
+        connection.inputMapper()->addEvents(frame.other.data(), frame.other.size());
       }
       buf.reset();
     }
@@ -507,17 +517,79 @@ void Spotlight::onEventDataAvailable(int fd, SubEventConnection& connection)
   } // end while loop
 }
 
+void Spotlight::setPointerClicksEnabled(bool enabled)
+{
+  m_pointerClicksEnabled = enabled;
+  if (!enabled) {
+    bool wasPressed = false;
+    for (auto& press : m_forwardedPointerPresses) {
+      wasPressed = wasPressed || press.second;
+      press.second = false;
+    }
+    if (wasPressed && m_virtualMouseDevice) {
+      const input_event release[] = {{{}, EV_KEY, BTN_LEFT, 0}, {{}, EV_SYN, SYN_REPORT, 0}};
+      m_virtualMouseDevice->emitEvents(release, 2);
+    }
+  }
+}
+
+// GNOME uses the presenter's own double-click control (0xdf), independently
+// of the idle timeout. Leave the single-click control and slide buttons intact.
+void Spotlight::setPointerDoubleClickEnabled(bool enabled)
+{
+  if (m_pointerDoubleClickEnabled == enabled) { return; }
+  m_pointerDoubleClickEnabled = enabled;
+  for (const auto& device : m_deviceConnections) {
+    for (const auto& sub : device.second->subDevices()) {
+      if (auto connection = qobject_cast<SubHidppConnection*>(sub.second.get())) {
+        configurePointerDoubleClick(connection);
+      }
+    }
+  }
+}
+
+void Spotlight::configurePointerDoubleClick(SubHidppConnection* connection)
+{
+  const auto& id = connection->deviceId();
+  // The 0xdf control is documented for original Spotlight only. Do not send
+  // a model-specific command to Spotlight 2 or unrelated HID++ hardware.
+  if (id.vendorId != 0x046d || (id.productId != 0xc53e && id.productId != 0xb503)) { return; }
+  const auto index = connection->featureSet().featureIndex(HIDPP::FeatureCode::ReprogramControlsV4);
+  if (!index) { return; }
+  // Bit 0 validates the diversion flag; bit 1 diverts to HID++ notifications.
+  const uint8_t flags = m_pointerDoubleClickEnabled ? 0x03 : 0x01;
+  connection->sendRequest(HIDPP::Message(HIDPP::Message::Type::Long,
+    connection->deviceIndex(), index, 3, HIDPP::Message::Data{0x00, 0xdf, flags}),
+    [](HidppConnectionInterface::MsgResult result, HIDPP::Message&&) {
+      if (result != HidppConnectionInterface::MsgResult::Ok) {
+        qCWarning(PROJECTEUR_DEVICE_LOG) << "Could not configure presenter double click:" << toString(result);
+      }
+    });
+}
+
 // -------------------------------------------------------------------------------------------------
 void Spotlight::registerForNotifications(SubHidppConnection* connection)
 {
   using namespace HIDPP;
 
+#ifndef PROJECTEUR_WITH_SETTINGS
+  configurePointerDoubleClick(connection);
+#endif
+
   // Logitech button next and back press and hold + movement
   if (const auto rcIndex = connection->featureSet().featureIndex(FeatureCode::ReprogramControlsV4))
   {
+    // Reinitialization after a receiver reconnect must not multiply handlers.
+    connection->unregisterNotificationCallback(this, rcIndex, 0);
+    connection->unregisterNotificationCallback(this, rcIndex, 1);
     connection->registerNotificationCallback(this, rcIndex, makeSafeCallback(
-    [this, connection](Message&& msg)
+    [this, connection, doublePressed = false](Message&& msg) mutable
     {
+      const bool doubleClick = msg[5] == 0xdf || msg[7] == 0xdf;
+      if (m_pointerDoubleClickEnabled && doubleClick && !doublePressed) {
+        emit pointerDoubleClicked();
+      }
+      doublePressed = doubleClick;
       // Logitech Spotlight:
       //   * Next Button = 0xda
       //   * Back Button = 0xdc

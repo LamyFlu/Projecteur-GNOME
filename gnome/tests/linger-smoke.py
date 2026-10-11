@@ -28,7 +28,7 @@ def move():
     call(f'{INTERFACE}.MoveForTesting', 3, -2)
 
 
-daemon = subprocess.Popen([sys.argv[1], '--disable-uinput'])
+daemon = subprocess.Popen([sys.argv[1], '--disable-uinput', '--no-device-scan'])
 try:
     for attempt in range(100):
         try:
