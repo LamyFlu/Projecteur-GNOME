@@ -62,6 +62,22 @@ Other distributions and GNOME versions have not been validated.
 
 ## Configure
 
+**Always show the pointer effect** is off by default. When enabled, the selected
+effect appears immediately and stays visible; the linger-time control in
+**Display behavior** is disabled. Turning it off restores the saved timeout.
+**Center on the remembered monitor each time the pointer button is pressed** is also off by
+default. It remembers the physical monitor where the effect last stopped and
+moves both the effect and system cursor to that monitor's center on every reported
+pointer-button press, including while the effect is still visible. If that monitor is unavailable, it uses the monitor currently
+containing the mouse cursor. Native press reporting varies by presenter;
+models that do not report a pointer-button press still center on effect activation.
+
+Click the outline **◎** target icon on the right of the top bar to select the
+current effect, toggle double-click switching, cursor hiding or presenter clicks,
+and enable each effect. Choose **Open preferences** for color, size, linger time,
+spotlight dimming, magnification and resets. The symbolic icon follows the Shell
+theme, and the menu stays in sync with the preferences window.
+
 1. After installation and logging back in, search for **Extensions** in the
    application overview.
 2. Find **Projecteur Pointer for Ubuntu 26.04** and make sure it is enabled.
@@ -120,6 +136,10 @@ zoom settings.
   rather than reaching the application. Ordinary mice are unaffected. In an
   application that locks the system cursor, its click position can differ from
   the visual effect's position.
+- **Center on the remembered monitor each time the pointer button is pressed** identifies the
+  last-used physical display by connector. In a multi-monitor presentation it
+  can return to the external presentation display instead of the laptop panel.
+  Moving the system cursor with the effect keeps optional presenter clicks aligned.
 - **Reset spotlight appearance** restores a 300-pixel diameter and 0.65 dimming.
 - **Reset magnifier appearance** restores a 300-pixel diameter and 2.0 zoom.
   Both reset buttons preserve effect enablement, the current mode, and click

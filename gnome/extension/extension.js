@@ -9,6 +9,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
+import {PointerIndicator} from './panel-indicator.js';
 import {PointerEffects} from './pointer-effects.js';
 import {enabledModes, resolveMode, nextMode} from './pointer-state.js';
 
@@ -19,6 +20,7 @@ const INTERFACE = 'org.projecteur.Gnome.Pointer';
 export default class ProjecteurPointerExtension extends Extension {
     enable() {
         this._active = false;
+        this._daemonActive = false;
         this._effects = new PointerEffects();
         this._unredirectDisabled = false;
         this._cursorTracker = global.backend.get_cursor_tracker();
@@ -39,13 +41,16 @@ export default class ProjecteurPointerExtension extends Extension {
         global.stage.set_child_above_sibling(this._dot, null);
 
         this._settings = this.getSettings();
+        this._indicator = new PointerIndicator(this, this._settings);
+        Main.panel.addToStatusArea('projecteur-pointer', this._indicator);
         this._settingsChanged = this._settings.connect('changed', (_settings, key) => {
             this._updateAppearance();
             this._updateCursorVisibility();
-            if (['pointer-mode', 'laser-enabled', 'spotlight-enabled', 'magnifier-enabled'].includes(key))
-                this._setActive(this._active);
+            if (['pointer-mode', 'laser-enabled', 'spotlight-enabled', 'magnifier-enabled', 'always-visible'].includes(key))
+                this._setActive(this._daemonActive);
             if (key === 'linger-seconds') this._syncLingerSeconds();
             if (key === 'double-click-switch') this._syncDoubleClick();
+            if (key === 'start-at-monitor-center') this._syncPointerCenter();
             if (key === 'pointer-clicks-enabled') this._syncPointerClicks();
         });
         this._updateAppearance();
@@ -81,6 +86,15 @@ export default class ProjecteurPointerExtension extends Extension {
                 this._handleMotion(deltaX, deltaY);
             });
 
+        this._pressSubscription = Gio.DBus.session.signal_subscribe(
+            BUS_NAME, INTERFACE, 'PointerButtonPressed', OBJECT_PATH, null,
+            Gio.DBusSignalFlags.NONE, () => {
+                if (this._settings?.get_boolean('start-at-monitor-center') && this._mode() !== null) {
+                    this._centerOnRememberedMonitor();
+                    this._updatePosition();
+                }
+            });
+
         this._doubleClickSubscription = Gio.DBus.session.signal_subscribe(
             BUS_NAME, INTERFACE, 'PointerDoubleClicked', OBJECT_PATH, null,
             Gio.DBusSignalFlags.NONE, () => {
@@ -97,19 +111,22 @@ export default class ProjecteurPointerExtension extends Extension {
                 this._syncLingerSeconds();
                 this._syncDoubleClick();
                 this._syncPointerClicks();
+                this._syncPointerCenter();
                 this._syncActiveProperty();
             },
             () => this._setActive(false));
+        this._setActive(false);
     }
 
     disable() {
-        this._setActive(false);
+        this._setActive(false, true);
         if (this._monitorChanged) {
             Main.layoutManager.disconnect(this._monitorChanged);
             this._monitorChanged = 0;
         }
         this._syncDoubleClick(false);
         this._syncPointerClicks(false);
+        this._syncPointerCenter(false);
         this._effects?.destroy();
         this._effects = null;
         this._cursorTracker = null;
@@ -119,6 +136,8 @@ export default class ProjecteurPointerExtension extends Extension {
             this._settings.disconnect(this._settingsChanged);
             this._settingsChanged = 0;
         }
+        this._indicator?.destroy();
+        this._indicator = null;
         this._settings = null;
 
         if (this._activeSubscription) {
@@ -128,6 +147,10 @@ export default class ProjecteurPointerExtension extends Extension {
         if (this._motionSubscription) {
             Gio.DBus.session.signal_unsubscribe(this._motionSubscription);
             this._motionSubscription = 0;
+        }
+        if (this._pressSubscription) {
+            Gio.DBus.session.signal_unsubscribe(this._pressSubscription);
+            this._pressSubscription = 0;
         }
         if (this._doubleClickSubscription) {
             Gio.DBus.session.signal_unsubscribe(this._doubleClickSubscription);
@@ -164,16 +187,22 @@ export default class ProjecteurPointerExtension extends Extension {
         this._updatePosition();
     }
 
-    _setActive(active) {
+    _setActive(active, forceHide = false) {
         if (!this._dot) return;
 
+        const wasActive = this._active;
+        this._daemonActive = active;
+        active = !forceHide && (active || this._settings.get_boolean('always-visible'));
         this._active = active;
+        const centered = active && !wasActive && this._mode() !== null &&
+            this._settings.get_boolean('start-at-monitor-center') &&
+            this._centerOnRememberedMonitor();
         this._dot.visible = active && this._mode() === 'laser';
         this._updatePosition();
         this._updateCursorVisibility();
         if (active && this._mode() !== null) {
             this._disableUnredirect();
-            this._syncSystemPointer(true);
+            if (!centered) this._syncSystemPointer(true);
             global.stage.set_child_above_sibling(this._dot, null);
             if (!this._positionTimer) {
                 this._positionTimer = GLib.timeout_add(
@@ -192,6 +221,54 @@ export default class ProjecteurPointerExtension extends Extension {
             }
             this._restoreUnredirect();
         }
+    }
+
+    _monitorConnector(index) {
+        try {
+            const manager = global.backend.get_monitor_manager();
+            const logical = manager.get_logical_monitors()
+                .find(monitor => monitor.get_number() === index);
+            const connectors = logical?.get_monitors()
+                .map(monitor => monitor.get_connector())
+                .filter(Boolean)
+                .sort();
+            if (connectors?.length) return connectors.join('|');
+        } catch (_error) {
+            // Geometry/index fallback keeps the feature usable if Mutter's
+            // monitor identity API is unavailable on an unexpected build.
+        }
+        return `index:${index}`;
+    }
+
+    _rememberMonitorAt(x, y) {
+        const monitor = Main.layoutManager.findMonitorForPoint(x, y);
+        if (!monitor) return;
+
+        const connector = this._monitorConnector(monitor.index);
+        if (this._settings.get_string('last-monitor-connector') !== connector)
+            this._settings.set_string('last-monitor-connector', connector);
+    }
+
+    _centerOnRememberedMonitor() {
+        const monitors = Main.layoutManager.monitors;
+        if (!monitors.length) return false;
+
+        const connector = this._settings.get_string('last-monitor-connector');
+        let monitor = monitors.find(item => this._monitorConnector(item.index) === connector);
+        if (!monitor) {
+            const [x, y] = global.get_pointer();
+            monitor = Main.layoutManager.findMonitorForPoint(x, y) ??
+                Main.layoutManager.primaryMonitor ?? monitors[0];
+        }
+        const x = Math.round(monitor.x + monitor.width / 2);
+        const y = Math.round(monitor.y + monitor.height / 2);
+        this._seat.warp_pointer(x, y);
+        this._pointerX = x;
+        this._pointerY = y;
+        this._systemPointerX = x;
+        this._systemPointerY = y;
+        this._rememberMonitorAt(x, y);
+        return true;
     }
 
     _updateCursorVisibility() {
@@ -278,6 +355,7 @@ export default class ProjecteurPointerExtension extends Extension {
         const size = this._dotSize;
         this._pointerX = Math.max(0, Math.min(global.stage.width - 1, this._pointerX));
         this._pointerY = Math.max(0, Math.min(global.stage.height - 1, this._pointerY));
+        this._rememberMonitorAt(this._pointerX, this._pointerY);
         this._dot.set_position(
             Math.round(this._pointerX - size / 2),
             Math.round(this._pointerY - size / 2));
@@ -293,6 +371,15 @@ export default class ProjecteurPointerExtension extends Extension {
 
     _mode() {
         return resolveMode(this._settings.get_string('pointer-mode'), this._modes());
+    }
+
+    _syncPointerCenter(enabled = this._settings.get_boolean('start-at-monitor-center')) {
+        Gio.DBus.session.call(BUS_NAME, OBJECT_PATH, INTERFACE,
+            'SetPointerCenterEnabled', new GLib.Variant('(b)', [enabled]),
+            null, Gio.DBusCallFlags.NONE, -1, null, (connection, result) => {
+                try { connection.call_finish(result); }
+                catch (error) { console.warn(`Projecteur pointer press: ${error.message}`); }
+            });
     }
 
     _syncPointerClicks(enabled = this._settings.get_boolean('pointer-clicks-enabled')) {

@@ -444,6 +444,14 @@ void Spotlight::onEventDataAvailable(int fd, SubEventConnection& connection)
     }
     ++buf;
 
+#ifndef PROJECTEUR_WITH_SETTINGS
+    // Observe the presenter's physical input before optional click filtering.
+    // Never infer a new press from a pause in movement or an idle timeout.
+    if (ev.type == EV_KEY && ev.code == BTN_LEFT && ev.value == 1) {
+      emit pointerButtonPressed();
+    }
+#endif
+
     const bool isSlideNavigationKey =
       ev.type == EV_KEY
       && (ev.code == KEY_RIGHT || ev.code == KEY_LEFT
@@ -548,6 +556,36 @@ void Spotlight::setPointerDoubleClickEnabled(bool enabled)
   }
 }
 
+void Spotlight::setPointerCenterEnabled(bool enabled)
+{
+  if (m_pointerCenterEnabled == enabled) { return; }
+  m_pointerCenterEnabled = enabled;
+  for (const auto& device : m_deviceConnections) {
+    for (const auto& sub : device.second->subDevices()) {
+      if (auto connection = qobject_cast<SubHidppConnection*>(sub.second.get())) {
+        configurePointerCenter(connection);
+      }
+    }
+  }
+}
+
+void Spotlight::configurePointerCenter(SubHidppConnection* connection)
+{
+  const auto& id = connection->deviceId();
+  if (id.vendorId != 0x046d || (id.productId != 0xc53e && id.productId != 0xb503)) { return; }
+  const auto index = connection->featureSet().featureIndex(HIDPP::FeatureCode::ReprogramControlsV4);
+  if (!index) { return; }
+  // Original Spotlight cursor long press (0xd8): transient diversion + raw XY.
+  // 0x22 validates both flags and turns them off; no persistent mapping changes.
+  const uint8_t flags = pointerReportingFlags(m_pointerCenterEnabled, true);
+  connection->sendRequest(HIDPP::Message(HIDPP::Message::Type::Long,
+    connection->deviceIndex(), index, 3, HIDPP::Message::Data{0x00, 0xd8, flags}),
+    [](HidppConnectionInterface::MsgResult result, HIDPP::Message&&) {
+      if (result != HidppConnectionInterface::MsgResult::Ok)
+        qCWarning(PROJECTEUR_DEVICE_LOG) << "Could not configure pointer press reporting:" << toString(result);
+    });
+}
+
 void Spotlight::configurePointerDoubleClick(SubHidppConnection* connection)
 {
   const auto& id = connection->deviceId();
@@ -556,8 +594,8 @@ void Spotlight::configurePointerDoubleClick(SubHidppConnection* connection)
   if (id.vendorId != 0x046d || (id.productId != 0xc53e && id.productId != 0xb503)) { return; }
   const auto index = connection->featureSet().featureIndex(HIDPP::FeatureCode::ReprogramControlsV4);
   if (!index) { return; }
-  // Bit 0 validates the diversion flag; bit 1 diverts to HID++ notifications.
-  const uint8_t flags = m_pointerDoubleClickEnabled ? 0x03 : 0x01;
+  // Bit 0 diverts to HID++; bit 1 validates the diversion flag.
+  const uint8_t flags = pointerReportingFlags(m_pointerDoubleClickEnabled, false);
   connection->sendRequest(HIDPP::Message(HIDPP::Message::Type::Long,
     connection->deviceIndex(), index, 3, HIDPP::Message::Data{0x00, 0xdf, flags}),
     [](HidppConnectionInterface::MsgResult result, HIDPP::Message&&) {
@@ -574,6 +612,7 @@ void Spotlight::registerForNotifications(SubHidppConnection* connection)
 
 #ifndef PROJECTEUR_WITH_SETTINGS
   configurePointerDoubleClick(connection);
+  configurePointerCenter(connection);
 #endif
 
   // Logitech button next and back press and hold + movement
@@ -582,14 +621,22 @@ void Spotlight::registerForNotifications(SubHidppConnection* connection)
     // Reinitialization after a receiver reconnect must not multiply handlers.
     connection->unregisterNotificationCallback(this, rcIndex, 0);
     connection->unregisterNotificationCallback(this, rcIndex, 1);
+    const auto pointerHeld = std::make_shared<bool>(false);
     connection->registerNotificationCallback(this, rcIndex, makeSafeCallback(
-    [this, connection, doublePressed = false](Message&& msg) mutable
+    [this, connection, pointerHeld, doublePressed = false](Message&& msg) mutable
     {
       const bool doubleClick = msg[5] == 0xdf || msg[7] == 0xdf;
       if (m_pointerDoubleClickEnabled && doubleClick && !doublePressed) {
         emit pointerDoubleClicked();
       }
       doublePressed = doubleClick;
+#ifndef PROJECTEUR_WITH_SETTINGS
+      // Track the exact hold separately from the linger timer.
+      const bool pointerDown = (msg[4] == 0 && msg[5] == 0xd8)
+        || (msg[6] == 0 && msg[7] == 0xd8);
+      if (m_pointerCenterEnabled && pointerDown && !*pointerHeld) { emit pointerButtonPressed(); }
+      *pointerHeld = pointerDown;
+#endif
       // Logitech Spotlight:
       //   * Next Button = 0xda
       //   * Back Button = 0xdc
@@ -621,8 +668,24 @@ void Spotlight::registerForNotifications(SubHidppConnection* connection)
     }), 0 /* function 0 */);
 
     connection->registerNotificationCallback(this, rcIndex,
-    makeSafeCallback([this, connection](Message&& msg)
+    makeSafeCallback([this, connection, pointerHeld](Message&& msg)
     {
+#ifndef PROJECTEUR_WITH_SETTINGS
+      if (m_pointerCenterEnabled && *pointerHeld) {
+        const int x = static_cast<int16_t>((uint16_t(msg[4]) << 8) | msg[5]);
+        const int y = static_cast<int16_t>((uint16_t(msg[6]) << 8) | msg[7]);
+        if (!x && !y) return;
+        setSpotActive(true);
+        restartActiveTimeout();
+        emit pointerMotion(x, y);
+        if (m_virtualMouseDevice) {
+          const input_event events[] = {{{}, EV_REL, REL_X, x},
+            {{}, EV_REL, REL_Y, y}, {{}, EV_SYN, SYN_REPORT, 0}};
+          m_virtualMouseDevice->emitEvents(events, 3);
+        }
+        return;
+      }
+#endif
       // Block some of the move events
       // TODO This works quiet okay in combination with adjusting x and y values,
       // but needs to be a more solid option to accumulate the mass of move events

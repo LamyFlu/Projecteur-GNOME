@@ -17,7 +17,7 @@ export default class ProjecteurPointerPreferences extends ExtensionPreferences {
             title: _('Laser pointer'), icon_name: 'input-mouse-symbolic',
         });
         const modes = new Adw.PreferencesGroup({title: _('Presenter effects'),
-            description: _('Choose an effect or switch enabled effects with a pointer-button double click.')});
+            description: _('Choose the effect shown by the presenter.')});
         page.add(modes);
         const modeLabels = {laser: _('Laser dot'), spotlight: _('Spotlight'), magnifier: _('Magnifier')};
         const modeRow = new Adw.ComboRow({title: _('Current effect')});
@@ -30,6 +30,7 @@ export default class ProjecteurPointerPreferences extends ExtensionPreferences {
             modeRow.model = Gtk.StringList.new(available.length
                 ? available.map(mode => modeLabels[mode])
                 : [_('Enable at least one effect first.')]);
+            modeRow.subtitle = available.length ? '' : _('Enable at least one effect first.');
             modeRow.sensitive = available.length > 0;
             modeRow.selected = Math.max(0, available.indexOf(
                 resolveMode(settings.get_string('pointer-mode'), available)));
@@ -58,18 +59,47 @@ export default class ProjecteurPointerPreferences extends ExtensionPreferences {
             settings.bind(key, row, 'value', Gio.SettingsBindFlags.DEFAULT);
             group.add(row);
         };
-        addSwitch(modes, 'double-click-switch', 'Double-click to switch effects',
+        const controls = new Adw.PreferencesGroup({
+            title: _('Presenter controls'),
+            description: _('Configure optional actions for the presenter pointer button.'),
+        });
+        page.add(controls);
+        addSwitch(controls, 'double-click-switch', 'Double-click to switch effects',
             'Original Logitech Spotlight only. Off by default; cycle enabled effects: laser dot, spotlight, magnifier.');
+        addSwitch(controls, 'pointer-clicks-enabled', 'Allow presenter mouse clicks',
+            'Off by default. Forward pointer-button clicks at the system cursor; double-click switching takes priority.');
+
+        const visibility = new Adw.PreferencesGroup({
+            title: _('Display behavior'),
+            description: _('Choose when and where the current effect appears, and whether the mouse cursor remains visible.'),
+        });
+        page.add(visibility);
+        addSwitch(visibility, 'always-visible', 'Always show the pointer effect',
+            'Keep the selected effect visible until this switch is turned off.');
+        const lingerRow = new Adw.SpinRow({
+            title: _('Stay visible after movement (seconds)'),
+            subtitle: _('Used when persistent display is off. After this time, hide the effect and restore the mouse cursor.'),
+            adjustment: new Gtk.Adjustment({
+                lower: 0.1, upper: 30, step_increment: 0.1, page_increment: 1,
+            }),
+            digits: 1,
+        });
+        settings.bind('linger-seconds', lingerRow, 'value',
+            Gio.SettingsBindFlags.DEFAULT);
+        settings.bind('always-visible', lingerRow, 'sensitive',
+            Gio.SettingsBindFlags.GET | Gio.SettingsBindFlags.INVERT_BOOLEAN);
+        visibility.add(lingerRow);
         const cursorRow = new Adw.SwitchRow({
             title: _('Hide the mouse cursor while an effect is visible'),
             subtitle: _('The mouse cursor returns when the effect disappears.'),
         });
         settings.bind('hide-system-cursor', cursorRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);
-        modes.add(cursorRow);
+        visibility.add(cursorRow);
+        addSwitch(visibility, 'start-at-monitor-center',
+            'Center on the remembered monitor each time the pointer button is pressed',
+            'On each reported pointer-button press, center the effect and mouse cursor on the last-used monitor, even while the effect remains visible.');
 
-        addSwitch(modes, 'pointer-clicks-enabled', 'Allow presenter mouse clicks',
-            'Off by default. Forward pointer-button clicks at the system cursor; double-click switching takes priority.');
         const addReset = (group, title, keys) => {
             const row = new Adw.ActionRow({title: _(title)});
             const button = new Gtk.Button({label: _('Reset'), valign: Gtk.Align.CENTER});
@@ -141,19 +171,6 @@ export default class ProjecteurPointerPreferences extends ExtensionPreferences {
         });
         settings.bind('dot-size', sizeRow, 'value', Gio.SettingsBindFlags.DEFAULT);
         group.add(sizeRow);
-
-
-        const lingerRow = new Adw.SpinRow({
-            title: _('Stay visible after movement (seconds)'),
-            subtitle: _('0.1–30 seconds; then hide the effect and restore the mouse cursor.'),
-            adjustment: new Gtk.Adjustment({
-                lower: 0.1, upper: 30, step_increment: 0.1, page_increment: 1,
-            }),
-            digits: 1,
-        });
-        settings.bind('linger-seconds', lingerRow, 'value',
-            Gio.SettingsBindFlags.DEFAULT);
-        group.add(lingerRow);
 
         const resetRow = new Adw.ActionRow({title: _('Reset appearance')});
         const resetButton = new Gtk.Button({

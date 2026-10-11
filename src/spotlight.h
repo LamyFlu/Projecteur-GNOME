@@ -44,6 +44,7 @@ public:
   void setActiveTimeoutMs(int timeoutMs);
   void restartActiveTimeout();
   void setPointerDoubleClickEnabled(bool enabled);
+  void setPointerCenterEnabled(bool enabled);
   void setPointerClicksEnabled(bool enabled);
   bool pointerClicksEnabled() const { return m_pointerClicksEnabled; }
 
@@ -68,6 +69,7 @@ signals:
   void pointerMotion(int deltaX, int deltaY);
   void slideNavigationPressed();
   void pointerDoubleClicked();
+  void pointerButtonPressed();
 
 private:
   enum class ConnectionResult { CouldNotOpen, NotASpotlightDevice, Connected };
@@ -75,6 +77,7 @@ private:
 
   bool addInputEventHandler(std::shared_ptr<SubEventConnection> connection);
   void registerForNotifications(SubHidppConnection* connection);
+  void configurePointerCenter(SubHidppConnection* connection);
   void configurePointerDoubleClick(SubHidppConnection* connection);
 
   bool setupDevEventInotify();
@@ -92,6 +95,7 @@ private:
   QTimer* m_connectionTimer = nullptr;
   QTimer* m_holdMoveEventTimer = nullptr;
   bool m_spotActive = false;
+  bool m_pointerCenterEnabled = false;
   bool m_pointerDoubleClickEnabled = false;
   bool m_pointerClicksEnabled = true;
   std::map<QString, bool> m_forwardedPointerPresses;

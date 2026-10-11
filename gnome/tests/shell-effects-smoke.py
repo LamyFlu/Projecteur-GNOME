@@ -44,7 +44,8 @@ def session(daemon_path, scratch):
     command('gsettings', 'set', 'org.gnome.shell', 'disable-user-extensions', 'false')
     with (scratch / 'shell.log').open('w') as shell_log, (scratch / 'daemon.log').open('w') as daemon_log:
         shell = subprocess.Popen(['gnome-shell', '--headless', '--wayland', '--no-x11',
-                                  '--virtual-monitor=1280x720', '--wayland-display=projecteur-test'],
+                                  '--virtual-monitor=1280x720', '--virtual-monitor=1024x768',
+                                  '--wayland-display=projecteur-test'],
                                  stdout=shell_log, stderr=subprocess.STDOUT)
         daemon = subprocess.Popen([daemon_path, '--disable-uinput', '--no-device-scan'],
                                   stdout=daemon_log, stderr=subprocess.STDOUT)
@@ -66,6 +67,23 @@ def session(daemon_path, scratch):
                      'global.pe._settings.set_boolean("magnifier-enabled",true); '
                      'global.pe._settings.set_double("linger-seconds",30); '
                      'global.pe._settings.set_boolean("hide-system-cursor",true); true')
+            assert not evaluate('global.pe._settings.get_boolean("always-visible")')
+            assert not evaluate('global.pe._settings.get_boolean("start-at-monitor-center")')
+            # Panel actions must share the same settings and update in both directions.
+            assert evaluate('Main.panel.statusArea["projecteur-pointer"] === global.pe._indicator')
+            assert evaluate('global.pe._indicator._switches.has("start-at-monitor-center")')
+            evaluate('global.pe._indicator._modeItems.get("spotlight").emit("activate", null); true')
+            assert evaluate('global.pe._mode()') == 'spotlight'
+            evaluate('global.pe._indicator._switches.get("hide-system-cursor").toggle(); true')
+            assert not evaluate('global.pe._settings.get_boolean("hide-system-cursor")')
+            evaluate('global.pe._settings.set_boolean("hide-system-cursor",true); true')
+            assert evaluate('global.pe._indicator._switches.get("hide-system-cursor").state')
+            evaluate('Main.overview.hide(); global.pe._indicator.menu.open(); true')
+            time.sleep(0.5)
+            command('gdbus', 'call', '--session', '--dest', 'org.gnome.Shell',
+                    '--object-path', '/org/gnome/Shell/Screenshot', '--method',
+                    'org.gnome.Shell.Screenshot.Screenshot', 'false', 'false', str(scratch / 'panel.png'))
+            evaluate('global.pe._indicator.menu.close(); true')
             bridge('SetActiveForTesting', 'true')
             time.sleep(0.2)
             for mode in ['laser', 'spotlight', 'magnifier']:
@@ -81,6 +99,46 @@ def session(daemon_path, scratch):
                         '--object-path', '/org/gnome/Shell/Screenshot', '--method',
                         'org.gnome.Shell.Screenshot.Screenshot', 'false', 'false', str(scratch / f'{mode}.png'))
                 assert (scratch / f'{mode}.png').stat().st_size > 1000
+            # Optional centering remembers the physical connector, warps both
+            # the system cursor and effect, and survives another activation.
+            assert evaluate('Main.layoutManager.monitors.length') == 2
+            bridge('SetActiveForTesting', 'false')
+            time.sleep(0.2)
+            monitor_state = evaluate('(() => { '
+                'const [first, second] = Main.layoutManager.monitors; '
+                'const connector = global.pe._monitorConnector(second.index); '
+                'global.pe._settings.set_string("last-monitor-connector",connector); '
+                'global.pe._settings.set_boolean("start-at-monitor-center",true); '
+                'global.pe._seat.warp_pointer(Math.round(first.x+first.width/2),Math.round(first.y+first.height/2)); '
+                'return {connector,x:Math.round(second.x+second.width/2),'
+                'y:Math.round(second.y+second.height/2)}; })()')
+            bridge('SetActiveForTesting', 'true')
+            time.sleep(0.2)
+            assert evaluate('({x:global.pe._pointerX,y:global.pe._pointerY,'
+                            'systemX:global.get_pointer()[0],systemY:global.get_pointer()[1],'
+                            'connector:global.pe._settings.get_string("last-monitor-connector")})') == dict(
+                                x=monitor_state['x'], y=monitor_state['y'],
+                                systemX=monitor_state['x'], systemY=monitor_state['y'],
+                                connector=monitor_state['connector'])
+            bridge('SetActiveForTesting', 'false')
+            time.sleep(0.2)
+            bridge('SetActiveForTesting', 'true')
+            time.sleep(0.2)
+            assert evaluate('[global.pe._pointerX,global.pe._pointerY]') == [
+                monitor_state['x'], monitor_state['y']]
+            # A new press must center again before the linger timeout expires,
+            # and also during persistent display. Changing modes is unnecessary.
+            for persistent in [False, True]:
+                evaluate(f'global.pe._settings.set_boolean("always-visible",{str(persistent).lower()}); true')
+                for _press in range(2):
+                    evaluate('global.pe._seat.warp_pointer(1400,200); true')
+                    time.sleep(0.1)
+                    bridge('PressForTesting')
+                    time.sleep(0.1)
+                    assert evaluate('[global.pe._pointerX,global.pe._pointerY,global.get_pointer()[0],global.get_pointer()[1]]') == [
+                        monitor_state['x'], monitor_state['y'], monitor_state['x'], monitor_state['y']]
+            evaluate('global.pe._settings.set_boolean("always-visible",false); true')
+            evaluate('global.pe._settings.set_boolean("start-at-monitor-center",false); true')
             def clicks_enabled():
                 return 'true' in command('gdbus', 'call', '--session', '--dest', 'org.projecteur.Gnome',
                     '--object-path', '/org/projecteur/Gnome/Pointer', '--method',
@@ -113,6 +171,7 @@ def session(daemon_path, scratch):
                      'global.pe._settings.set_boolean("spotlight-enabled",false); '
                      'global.pe._settings.set_boolean("magnifier-enabled",false); true')
             assert evaluate('global.pe._mode()') is None
+            assert evaluate('global.pe._indicator._empty.visible && !global.pe._indicator._selector.reactive')
             assert evaluate('({effects:global.pe._effects.actor.visible,dot:global.pe._dot.visible,'
                             'cursor:global.pe._cursorVisibilityInhibited,focus:global.pe._cursorFocusInhibited,'
                             'unredirect:global.pe._unredirectDisabled})') == dict(
@@ -128,10 +187,22 @@ def session(daemon_path, scratch):
                             'cursor:global.pe._cursorVisibilityInhibited,focus:global.pe._cursorFocusInhibited,'
                             'unredirect:global.pe._unredirectDisabled})') == dict(
                                 effects=False, dot=False, cursor=False, focus=False, unredirect=False)
-            # GTK preferences must load the new schema/module without errors.
-            prefs_env = dict(os.environ, WAYLAND_DISPLAY='projecteur-test')
-            subprocess.run(['gnome-extensions', 'prefs', UUID], env=prefs_env, check=True,
-                           stdout=shell_log, stderr=shell_log)
+            # Persistent mode displays immediately, survives idle expiry and
+            # retains cursor cleanup when every effect is disabled.
+            evaluate('global.pe._settings.set_boolean("laser-enabled",true); '
+                     'global.pe._settings.set_double("linger-seconds",0.1); '
+                     'global.pe._indicator._switches.get("always-visible").toggle(); true')
+            bridge('MoveForTesting', 3, -2)
+            time.sleep(0.4)
+            assert evaluate('!global.pe._daemonActive && global.pe._active && global.pe._dot.visible')
+            evaluate('global.pe._settings.set_boolean("laser-enabled",false); true')
+            assert evaluate('!global.pe._dot.visible && !global.pe._cursorVisibilityInhibited')
+            evaluate('global.pe._settings.set_boolean("laser-enabled",true); true')
+            assert evaluate('global.pe._dot.visible && global.pe._cursorVisibilityInhibited')
+            evaluate('global.pe._settings.set_boolean("always-visible",false); true')
+            assert evaluate('!global.pe._active && !global.pe._cursorVisibilityInhibited')
+            # Open GTK preferences through the panel action, not a separate CLI shortcut.
+            evaluate('global.pe._indicator.menu._getMenuItems().at(-1).emit("activate", null); true')
             for attempt in range(40):
                 bounds = evaluate('(() => { const w = global.get_window_actors().map(a => a.meta_window)'
                                   '.find(w => w.get_title()?.includes("Projecteur Pointer")); '
@@ -148,6 +219,12 @@ def session(daemon_path, scratch):
                     'org.gnome.Shell.Screenshot.ScreenshotArea', *map(str, bounds),
                     'false', str(scratch / 'preferences.png'))
             assert (scratch / 'preferences.png').stat().st_size > 1000, 'Preferences were not rendered'
+            evaluate('global.pe._settings.set_boolean("always-visible",true); true')
+            time.sleep(0.3)
+            command('gdbus', 'call', '--session', '--dest', 'org.gnome.Shell',
+                    '--object-path', '/org/gnome/Shell/Screenshot', '--method',
+                    'org.gnome.Shell.Screenshot.ScreenshotArea', *map(str, bounds),
+                    'false', str(scratch / 'preferences-persistent.png'))
             artifacts = os.environ.get('PROJECTEUR_TEST_ARTIFACTS')
             if artifacts:
                 destination = Path(artifacts)
@@ -155,11 +232,13 @@ def session(daemon_path, scratch):
                 for image in scratch.glob('*.png'):
                     shutil.copyfile(image, destination / image.name)
             evaluate('global.pe.disable(); true')
+            assert evaluate('Main.panel.statusArea["projecteur-pointer"] === undefined')
+            assert evaluate('!global.pe._active && !global.pe._cursorVisibilityInhibited && !global.pe._positionTimer')
             time.sleep(0.2)
             text = (scratch / 'shell.log').read_text()
             for marker in ['JS ERROR', 'Clutter-CRITICAL', 'Failed to compile', 'TypeError:', 'ReferenceError:']:
                 assert marker not in text, text
-            print('PASS: real GNOME rendering, cursor cleanup, D-Bus cycling, disabled modes, preferences')
+            print('PASS: real GNOME rendering, cursor cleanup, D-Bus cycling, disabled modes, panel actions, preferences')
         except Exception:
             print((scratch / 'shell.log').read_text(), file=sys.stderr)
             raise
@@ -185,7 +264,10 @@ if __name__ == '__main__':
         session(sys.argv[2], Path(sys.argv[3]))
     else:
         daemon_path = str(Path(sys.argv[1]).resolve())
-        with tempfile.TemporaryDirectory(prefix='projecteur-gnome-test-') as folder:
+        # Portal/cache helpers can briefly outlive the private session and race
+        # TemporaryDirectory cleanup after every functional assertion passed.
+        with tempfile.TemporaryDirectory(prefix='projecteur-gnome-test-',
+                                         ignore_cleanup_errors=True) as folder:
             scratch = Path(folder)
             env = dict(os.environ, GDK_BACKEND='wayland', GSK_RENDERER='gl', WAYLAND_DISPLAY='projecteur-test', DISPLAY='', XDG_DATA_HOME=str(scratch / 'data'),
                        XDG_CONFIG_HOME=str(scratch / 'config'), XDG_CACHE_HOME=str(scratch / 'cache'))

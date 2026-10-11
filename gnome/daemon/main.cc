@@ -37,6 +37,8 @@ public:
             this, &PointerBridge::SlideNavigationPressed);
     connect(m_spotlight, &Spotlight::pointerDoubleClicked,
             this, &PointerBridge::PointerDoubleClicked);
+    connect(m_spotlight, &Spotlight::pointerButtonPressed,
+            this, &PointerBridge::PointerButtonPressed);
     m_deviceConnected = m_spotlight->anySpotlightDeviceConnected();
   }
 
@@ -58,6 +60,8 @@ public slots:
     return true;
   }
 
+  void SetPointerCenterEnabled(bool enabled) { m_spotlight->setPointerCenterEnabled(enabled); }
+
   void SetPointerClicksEnabled(bool enabled)
   {
     m_spotlight->setPointerClicksEnabled(enabled);
@@ -73,6 +77,8 @@ public slots:
   {
     if (m_doubleClickEnabled) { emit PointerDoubleClicked(); }
   }
+
+  void PressForTesting() { emit PointerButtonPressed(); }
 
   void SetActiveForTesting(bool active)
   {
@@ -94,6 +100,7 @@ signals:
   void DeviceConnectedChanged(bool connected);
   void SlideNavigationPressed();
   void PointerDoubleClicked();
+  void PointerButtonPressed();
 
 private slots:
   void setActive(bool active)

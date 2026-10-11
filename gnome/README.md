@@ -47,6 +47,17 @@ press are suppressed. Keyboard/slide events and pointer motion are unaffected.
 Upstream KDE builds retain their existing forwarding path.
 Spotlight/magnifier reset buttons reset only their appearance keys.
 
+Optional monitor-center startup stores the physical connector for the monitor
+last occupied by the effect. Each `PointerButtonPressed` signal warps both the Shell
+effect and system cursor to that monitor's center, keeping optional presenter
+click forwarding aligned. Missing connectors fall back to the monitor containing
+the current system pointer. Original Spotlight uses transient HID++ control
+`0xd8` long-press diversion with raw XY forwarding while centering is enabled;
+`SetPointerCenterEnabled(false)` restores native long-press movement. This command
+is restricted to original Spotlight USB/Bluetooth IDs. Other models require a
+reported `BTN_LEFT` press; otherwise they retain activation-only centering.
+`PressForTesting()` exercises the press signal without hardware.
+
 `SetPointerDoubleClickEnabled(bool)` configures that control;
 `DoubleClickForTesting()` emits a double-click signal only while the option is
 on. `--no-device-scan --disable-uinput` isolates synthetic tests from hardware.
@@ -90,8 +101,9 @@ python3 gnome/tests/shell-effects-smoke.py build/gnome/projecteur-gnome-daemon
 
 It requires GNOME 50 and a working EGL renderer; it is not run in the minimal
 CI container. It checks real effect rendering, D-Bus switching, disabled effects,
-cursor/focus cleanup, and the native GTK preferences window. To retain local
-screenshots for review, set `PROJECTEUR_TEST_ARTIFACTS` to an ignored directory
+cursor/focus cleanup, top-panel actions and settings synchronization, indicator
+cleanup on disable, persistent visibility across idle expiry, and opening the native
+GTK preferences from the panel. To retain local screenshots for review, set `PROJECTEUR_TEST_ARTIFACTS` to an ignored directory
 such as `build/gnome/visual-check`. GNOME CI builds in an Ubuntu 26.04 container
 and runs these checks; the inherited Plasma workflows run only in the upstream
 repository.

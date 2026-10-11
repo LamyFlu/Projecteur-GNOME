@@ -116,11 +116,12 @@ if (schema) {
     Gio.Settings.sync();
 }' "$extension_dir/schemas"
 fi
-install -d "$extension_dir" "$extension_dir/schemas"
-for file in metadata.json extension.js prefs.js i18n.js pointer-effects.js pointer-state.js stylesheet.css; do
+install -d "$extension_dir" "$extension_dir/schemas" "$extension_dir/icons"
+for file in metadata.json extension.js prefs.js i18n.js pointer-effects.js pointer-state.js panel-indicator.js stylesheet.css; do
   install -m 0644 "$script_dir/extension/$file" "$extension_dir/$file"
 done
 install -m 0644 "$script_dir/extension/schemas/"*.gschema.xml "$extension_dir/schemas/"
+install -m 0644 "$script_dir/extension/icons/projecteur-target-symbolic.svg" "$extension_dir/icons/"
 glib-compile-schemas --strict "$extension_dir/schemas"
 
 install -d "$user_service_dir"

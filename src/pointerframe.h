@@ -1,6 +1,7 @@
 // This file is part of Projecteur - see LICENSE.md.
 #pragma once
 #include <linux/input.h>
+#include <cstdint>
 #include <vector>
 
 // Devices may put MSC_SCAN or buttons before REL_X/Y. Keep mouse movement
@@ -54,4 +55,13 @@ inline std::vector<input_event> filterPointerClicks(const input_event* events,
     result.push_back(event);
   }
   return result;
+}
+
+// HID++ 0x1b04: state bits are followed by their valid bits.
+// An off command must send valid bits even though the state bits are clear.
+inline uint8_t pointerReportingFlags(bool enabled, bool rawXY)
+{
+  const uint8_t valid = rawXY ? 0x22 : 0x02;
+  const uint8_t state = rawXY ? 0x11 : 0x01;
+  return valid | (enabled ? state : 0);
 }

@@ -14,10 +14,22 @@
       <default>true</default>
       <summary>Hide the system cursor while the laser dot is visible</summary>
     </key>
+    <key name="always-visible" type="b">
+      <default>false</default>
+      <summary>Keep the selected effect visible without an idle timeout</summary>
+    </key>
     <key name="linger-seconds" type="d">
       <range min="0.1" max="30.0"/>
       <default>3.0</default>
       <summary>Seconds to keep the laser dot after the last presenter motion</summary>
+    </key>
+    <key name="start-at-monitor-center" type="b">
+      <default>false</default>
+      <summary>Start each activation at the center of the remembered monitor</summary>
+    </key>
+    <key name="last-monitor-connector" type="s">
+      <default>''</default>
+      <summary>Connector identity of the monitor last used by the pointer effect</summary>
     </key>
     <key name="pointer-mode" type="s">
       <choices><choice value="laser"/><choice value="spotlight"/><choice value="magnifier"/></choices>

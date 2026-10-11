@@ -2,6 +2,10 @@
 #include <cassert>
 int main()
 {
+  assert(pointerReportingFlags(true, false) == 0x03);
+  assert(pointerReportingFlags(false, false) == 0x02);
+  assert(pointerReportingFlags(true, true) == 0x33);
+  assert(pointerReportingFlags(false, true) == 0x22);
   const input_event mixed[] = {{{}, EV_MSC, MSC_SCAN, 123},
     {{}, EV_KEY, KEY_RIGHT, 1}, {{}, EV_REL, REL_X, 5},
     {{}, EV_REL, REL_Y, -3}, {{}, EV_SYN, SYN_REPORT, 0}};

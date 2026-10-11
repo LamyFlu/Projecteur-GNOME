@@ -3,6 +3,9 @@ import GLib from 'gi://GLib';
 // Chinese locales share the Traditional Chinese interface; all other locales
 // use the English source strings. Respect LANGUAGE/LC_MESSAGES via GLib.
 const traditionalChinese = {
+    'Always show the pointer effect': '永久顯示指示效果',
+    'Keep the selected effect visible until this switch is turned off.': '持續顯示目前效果，直到關閉此開關。',
+    'Open preferences': '開啟完整設定',
     'Enable laser dot': '啟用雷射紅點',
     'Enable at least one effect first.': '請先啟用其中一個指示效果。',
     'Disabled effects are skipped when selecting or switching modes.': '選擇或切換效果時會略過未啟用的效果。',
@@ -11,7 +14,13 @@ const traditionalChinese = {
     'Reset spotlight appearance': '還原聚光預設外觀',
     'Reset magnifier appearance': '還原放大預設外觀',
     'Presenter effects': '簡報指示效果',
-    'Choose an effect or switch enabled effects with a pointer-button double click.': '選擇效果，或快速點兩下指示鍵切換已啟用的效果。',
+    'Choose the effect shown by the presenter.': '選擇簡報器目前顯示的指示效果。',
+    'Display behavior': '顯示行為',
+    'Choose when and where the current effect appears, and whether the mouse cursor remains visible.': '設定目前效果的顯示時機與位置，以及是否保留滑鼠游標。',
+    'Presenter controls': '簡報器操作',
+    'Configure optional actions for the presenter pointer button.': '設定簡報器指示鍵的選用操作。',
+    'Center on the remembered monitor each time the pointer button is pressed': '每次按下指示鍵時從上次螢幕中央開始',
+    'On each reported pointer-button press, center the effect and mouse cursor on the last-used monitor, even while the effect remains visible.': '每次收到指示鍵按下訊號，將效果與滑鼠游標移到上次使用螢幕中央；效果仍顯示時也適用。',
     'Current effect': '目前效果',
     'Laser dot': '雷射紅點',
     'Spotlight': '聚光',
@@ -32,6 +41,7 @@ const traditionalChinese = {
     'Laser dot appearance': '雷射紅點外觀',
     'Hide the mouse cursor while an effect is visible': '顯示指示效果時隱藏滑鼠游標',
     'The mouse cursor returns when the effect disappears.': '指示效果消失後自動恢復滑鼠箭頭。',
+    'Used when persistent display is off. After this time, hide the effect and restore the mouse cursor.': '「永久顯示」關閉時使用；時間到後隱藏效果並恢復滑鼠游標。',
     '0.1–30 seconds; then hide the effect and restore the mouse cursor.': '0.1–30 秒；時間到後隱藏效果並恢復滑鼠游標。',
     'Laser pointer': '雷射指標',
     'Pointer appearance': '指標外觀',

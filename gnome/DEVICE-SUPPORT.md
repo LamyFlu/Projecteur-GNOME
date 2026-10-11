@@ -11,7 +11,8 @@ are not opened as a workaround.
 Only the original Logitech Spotlight USB receiver (`046d:c53e`) has been
 verified on this GNOME fork. The user confirmed the three effects, native
 double-click switching, optional mouse clicks, effect toggles, and reset
-controls on the original USB device on 2026-10-11. A device-table test proves inclusion in the scanner
+controls on the original USB device on 2026-10-11. The user also confirmed
+repeated-press monitor centering on the original USB device on the same date. A device-table test proves inclusion in the scanner
 and permissions rules, not working hardware.
 
 | Presenter | USB ID | Bluetooth ID | GNOME hardware verification |
@@ -57,3 +58,14 @@ and whether all three effects work in a fullscreen presentation. Include only
 relevant, redacted daemon log lines; do not publish complete system logs.
 Never change global input permissions or run the daemon as root to make a
 device appear supported.
+
+## Centering on every pointer press
+
+Original Spotlight USB/Bluetooth can enable transient `0xd8` long-press and
+raw XY reports while the center option is enabled. Motion is forwarded through
+the virtual mouse. Turning the option off restores native movement; no persistent
+mapping is written. The control is not sent to Spotlight 2 or other models.
+Other presenters use reported `BTN_LEFT` presses when available. Multi-monitor
+centering and repeated presses are verified in isolated GNOME tests; the newly
+added original Spotlight USB long-press path was confirmed by the user on
+2026-10-11. Bluetooth and other models remain hardware-unverified.

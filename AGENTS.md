@@ -24,7 +24,9 @@ on Wayland. The user-facing entry points are `install.sh`, `uninstall.sh`,
    - `gnome-extensions info projecteur-pointer-ubuntu26@projecteur.github.io`
    - `systemctl --user is-active projecteur-gnome-daemon.service`
    - `journalctl --user -b -u projecteur-gnome-daemon.service --no-pager`
-5. Open preferences with `gnome-extensions prefs
+5. Use the theme-colored outline target icon in the top panel for effect
+   selection and common toggles, or choose Open preferences for all controls.
+   Open preferences with `gnome-extensions prefs
    projecteur-pointer-ubuntu26@projecteur.github.io`. Offer color, diameter
    (6–96 logical pixels), system-cursor hiding, and linger time (0.1–30 seconds).
    Also offer laser/spotlight/magnifier selection, per-effect enablement,
@@ -35,6 +37,12 @@ on Wayland. The user-facing entry points are `install.sh`, `uninstall.sh`,
    Fresh installs enable only the laser dot; upgrades preserve toggle values.
    All effects can be disabled; show a disabled selector prompt and restore
    the cursor when none are enabled.
+   Always-visible mode is off by default; when enabled it displays the selected
+   effect immediately and disables the linger-time control without resetting it.
+   Remembered-monitor center startup is off by default. When enabled, each
+   reported pointer-button press moves the effect and system cursor to the center of the physical
+   monitor where the effect last stopped; a missing monitor falls back to the
+   monitor containing the current system cursor.
    The timeout starts at the last presenter movement, not the physical button
    release. Chinese locales use Traditional Chinese; other locales use English.
 6. Ask the user to test all three effects, optional double-click switching,
