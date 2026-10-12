@@ -37,6 +37,7 @@ systemctl --user disable --now projecteur-gnome-daemon.service 2>/dev/null || tr
 
 for path in \
   "$HOME/.local/bin/projecteur-gnome-daemon" \
+  "$HOME/.local/bin/projecteur-gnome" \
   "$user_service_dir/projecteur-gnome-daemon.service"; do
   if [[ -e "$path" ]]; then
     rm -f -- "$path"

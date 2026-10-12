@@ -359,9 +359,10 @@ int Spotlight::connectDevices()
           lastPreset = preset;
         });
 #else
-        // The GNOME bridge deliberately has no settings UI. With an empty map,
-        // InputMapper forwards presenter buttons to its uinput devices unchanged.
+        // GNOME settings are supplied by the bridge; an empty map preserves forwarding.
         im->setKeyEventInterval(250);
+        im->setConfiguration(m_inputMapConfiguration);
+        connect(im, &InputMapper::actionMapped, this, &Spotlight::mappedAction);
 #endif
       }
 
@@ -475,6 +476,15 @@ void Spotlight::onEventDataAvailable(int fd, SubEventConnection& connection)
         m_forwardedPointerPresses[connection.path()]);
       events = filtered.data();
       count = filtered.size();
+#endif
+      // Scan-code metadata is not part of the configurable GNOME key sequence.
+      // Leave the default (empty-map) forwarding path byte-for-byte unchanged.
+#ifndef PROJECTEUR_WITH_SETTINGS
+      std::vector<input_event> normalized;
+      if (!m_inputMapConfiguration.empty()) {
+        for (size_t i = 0; i < count; ++i) if (events[i].type != EV_MSC) normalized.push_back(events[i]);
+        events = normalized.data(); count = normalized.size();
+      }
 #endif
       const auto frame = splitPointerFrame(events, count);
       const bool isMouseMoveEvent = frame.x != 0 || frame.y != 0;
@@ -803,4 +813,33 @@ bool Spotlight::setupDevEventInotify()
     ::close(static_cast<int>(notifier->socket()));
   });
   return true;
+}
+
+void Spotlight::setInputMapConfiguration(const InputMapConfig& config)
+{
+  m_inputMapConfiguration = config;
+  for (const auto& item : m_deviceConnections) {
+    const auto mapper = item.second->inputMapper();
+    // Stop pending sequences and rebuild even when only shell action parameters changed.
+    // Mapping changes should be made while the presenter is idle.
+    mapper->setConfiguration(InputMapConfig{});
+    mapper->setConfiguration(config);
+  }
+}
+
+void Spotlight::emitMappedScroll(bool horizontal, int amount)
+{
+  if (!m_virtualMouseDevice || !amount) return;
+  const input_event events[] = {{{}, EV_REL, uint16_t(horizontal ? REL_HWHEEL : REL_WHEEL), amount},
+    {{}, EV_SYN, SYN_REPORT, 0}};
+  m_virtualMouseDevice->emitEvents(events, 2);
+}
+
+void Spotlight::emitMappedVolume(int amount)
+{
+  if (!m_virtualKeyDevice || !amount) return;
+  const uint16_t key = amount > 0 ? KEY_VOLUMEUP : KEY_VOLUMEDOWN;
+  const input_event events[] = {{{}, EV_KEY, key, 1}, {{}, EV_SYN, SYN_REPORT, 0},
+    {{}, EV_KEY, key, 0}, {{}, EV_SYN, SYN_REPORT, 0}};
+  m_virtualKeyDevice->emitEvents(events, 4);
 }

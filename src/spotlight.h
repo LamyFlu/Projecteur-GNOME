@@ -11,6 +11,7 @@
 
 #include "asynchronous.h"
 #include "devicescan.h"
+#include "deviceinput.h"
 
 class QTimer;
 class Settings;
@@ -46,6 +47,9 @@ public:
   void setPointerDoubleClickEnabled(bool enabled);
   void setPointerCenterEnabled(bool enabled);
   void setPointerClicksEnabled(bool enabled);
+  void setInputMapConfiguration(const InputMapConfig& config);
+  void emitMappedScroll(bool horizontal, int amount);
+  void emitMappedVolume(int amount);
   bool pointerClicksEnabled() const { return m_pointerClicksEnabled; }
 
   struct ConnectedDeviceInfo {
@@ -70,6 +74,7 @@ signals:
   void slideNavigationPressed();
   void pointerDoubleClicked();
   void pointerButtonPressed();
+  void mappedAction(std::shared_ptr<Action> action);
 
 private:
   enum class ConnectionResult { CouldNotOpen, NotASpotlightDevice, Connected };
@@ -85,6 +90,7 @@ private:
   void removeDeviceConnection(const QString& devicePath);
   void onEventDataAvailable(int fd, SubEventConnection& connection);
 
+  InputMapConfig m_inputMapConfiguration;
   const Options m_options;
   std::map<DeviceId, std::shared_ptr<DeviceConnection>> m_deviceConnections;
   std::vector<DeviceId> m_activeDeviceIds;

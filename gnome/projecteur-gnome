@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""Control the running GNOME daemon/extension through session D-Bus."""
+import argparse
+import ast
+import json
+import subprocess
+import sys
+
+
+def invoke(method, *values, effects=False):
+    name = 'org.projecteur.Gnome.Effects' if effects else 'org.projecteur.Gnome'
+    interface = 'org.projecteur.Gnome.Effects' if effects else 'org.projecteur.Gnome.Pointer'
+    path = '/org/projecteur/Gnome/Effects' if effects else '/org/projecteur/Gnome/Pointer'
+    result = subprocess.run(['gdbus', 'call', '--session', '--dest', name, '--object-path', path,
+        '--method', interface + '.' + method, '--', *map(str, values)], text=True, capture_output=True)
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip())
+    if result.stdout.strip() == '(false,)':
+        raise RuntimeError('Request rejected: check enabled effects, preset name, or presenter capabilities.')
+    return result.stdout.strip()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest='command', required=True)
+    sub.add_parser('status')
+    effect = sub.add_parser('effect'); effect.add_argument('mode', choices=['laser', 'spotlight', 'magnifier'])
+    preview = sub.add_parser('preview'); preview.add_argument('mode', choices=['laser', 'spotlight', 'magnifier'])
+    preview.add_argument('--seconds', type=int, choices=range(1, 31), metavar='1..30', default=5)
+    sub.add_parser('stop-preview')
+    preset = sub.add_parser('preset'); preset.add_argument('name')
+    sub.add_parser('preset-next'); sub.add_parser('preset-previous'); sub.add_parser('preferences')
+    timer = sub.add_parser('timer'); timer.add_argument('action', choices=['start', 'pause', 'resume', 'reset'])
+    timer.add_argument('--minutes', type=int, choices=range(1, 1441), metavar='1..1440', default=15)
+    timer.add_argument('--arm', action='store_true')
+    vibration = sub.add_parser('vibrate')
+    vibration.add_argument('--intensity', type=int, choices=range(1, 256), metavar='1..255', default=128)
+    vibration.add_argument('--length', type=int, choices=range(1, 11), metavar='1..10', default=1)
+    args = parser.parse_args()
+    try:
+        if args.command == 'status':
+            print(json.dumps(json.loads(ast.literal_eval(invoke('GetPresentationStatus'))[0]), ensure_ascii=False, indent=2))
+        elif args.command == 'effect': invoke('SelectEffect', args.mode, effects=True)
+        elif args.command == 'preview': invoke('Preview', args.mode, args.seconds, effects=True)
+        elif args.command == 'stop-preview': invoke('StopPreview', effects=True)
+        elif args.command == 'preset': invoke('ApplyPreset', args.name, effects=True)
+        elif args.command in ('preset-next', 'preset-previous'):
+            invoke('CyclePreset', 1 if args.command == 'preset-next' else -1, effects=True)
+        elif args.command == 'preferences': invoke('OpenPreferences', effects=True)
+        elif args.command == 'timer':
+            if args.action == 'start': invoke('StartPresentationTimer', args.minutes * 60, str(args.arm).lower())
+            else: invoke({'pause':'PausePresentationTimer', 'resume':'ResumePresentationTimer', 'reset':'ResetPresentationTimer'}[args.action])
+        elif args.command == 'vibrate':
+            invoke('Vibrate', args.intensity, args.length)
+            print('Vibration request queued; confirm physical feedback on the presenter.')
+    except (RuntimeError, ValueError, OSError) as error:
+        print(f'Projecteur: {error}', file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

@@ -913,6 +913,8 @@ void InputMapper::setConfiguration(const InputMapConfig& config)
 {
   if (config == impl->m_config) { return; }
 
+  impl->m_seqTimer->stop();
+  impl->m_lastState = {DeviceKeyMap::Result::Miss, nullptr};
   impl->m_config = config;
   impl->resetState();
   impl->m_keymap.reconfigure(impl->m_config);
@@ -924,6 +926,8 @@ void InputMapper::setConfiguration(InputMapConfig&& config)
 {
   if (config == impl->m_config) { return; }
 
+  impl->m_seqTimer->stop();
+  impl->m_lastState = {DeviceKeyMap::Result::Miss, nullptr};
   impl->m_config.swap(config);
   impl->resetState();
   impl->m_keymap.reconfigure(impl->m_config);

@@ -99,6 +99,38 @@ def session(daemon_path, scratch):
                         '--object-path', '/org/gnome/Shell/Screenshot', '--method',
                         'org.gnome.Shell.Screenshot.Screenshot', 'false', 'false', str(scratch / f'{mode}.png'))
                 assert (scratch / f'{mode}.png').stat().st_size > 1000
+            # Keep the cutout in the monitor center, with text inside the live clone.
+            evaluate('global.pe._seat.warp_pointer(640,360); '
+                'global.previewFixture = new imports.gi.St.Widget({style:"background-color:white;",width:480,height:160}); '
+                'global.previewFixture.set_position(400,300); Main.uiGroup.add_child(global.previewFixture); '
+                'global.previewFixture.add_child(new imports.gi.St.Label({text:"Aa 0123456789 Live magnifier",style:"font-size:22px;color:black;"})); true')
+            time.sleep(.2)
+            # Exercise advanced Cairo cutouts and all shader quality paths.
+            for shape in ['circle', 'square', 'diamond']:
+                evaluate(f'global.pe._settings.set_string("pointer-mode","spotlight"); '
+                    f'global.pe._settings.set_string("spotlight-shape","{shape}"); '
+                    'global.pe._settings.set_int("spotlight-rotation",30); '
+                    'global.pe._settings.set_int("spotlight-border-width",3); '
+                    'global.pe._settings.set_string("spotlight-color","rgb(20,30,60)"); true')
+                time.sleep(.2)
+                command('gdbus', 'call', '--session', '--dest', 'org.gnome.Shell',
+                    '--object-path', '/org/gnome/Shell/Screenshot', '--method',
+                    'org.gnome.Shell.Screenshot.Screenshot', 'false', 'false', str(scratch / f'shape-{shape}.png'))
+            for quality in ['smooth', 'text', 'pixel']:
+                evaluate(f'global.pe._settings.set_string("pointer-mode","magnifier"); '
+                    f'global.pe._settings.set_string("magnifier-quality","{quality}"); true')
+                time.sleep(.2)
+                command('gdbus', 'call', '--session', '--dest', 'org.gnome.Shell',
+                    '--object-path', '/org/gnome/Shell/Screenshot', '--method',
+                    'org.gnome.Shell.Screenshot.Screenshot', 'false', 'false', str(scratch / f'quality-{quality}.png'))
+            evaluate('global.pe._settings.set_boolean("trail-enabled",true); '
+                'global.pe._settings.set_double("trail-seconds",0.1); '
+                'global.pe._pointerX+=100; global.pe._updatePosition(); true')
+            assert evaluate('global.pe._effects._trail.visible && global.pe._effects._trailPoints.length > 0')
+            time.sleep(.25)
+            assert evaluate('global.pe._effects._trailPoints.length === 0 && !global.pe._effects._trailTimer')
+            evaluate('global.pe._settings.set_boolean("trail-enabled",false); true')
+            evaluate('global.previewFixture.destroy(); true')
             # Optional centering remembers the physical connector, warps both
             # the system cursor and effect, and survives another activation.
             assert evaluate('Main.layoutManager.monitors.length') == 2
@@ -201,6 +233,37 @@ def session(daemon_path, scratch):
             assert evaluate('global.pe._dot.visible && global.pe._cursorVisibilityInhibited')
             evaluate('global.pe._settings.set_boolean("always-visible",false); true')
             assert evaluate('!global.pe._active && !global.pe._cursorVisibilityInhibited')
+            # Polling must update panel timer controls and stop on disable.
+            bridge('StartPresentationTimer', 10, 'false')
+            time.sleep(1.3)
+            assert evaluate('global.pe._indicator._countdown.visible && global.pe._indicator._pauseTimer.reactive')
+            bridge('PausePresentationTimer')
+            time.sleep(1.3)
+            assert evaluate('global.pe._indicator._resumeTimer.reactive && !global.pe._indicator._pauseTimer.reactive')
+            bridge('ResetPresentationTimer')
+            time.sleep(1.3)
+            assert evaluate('!global.pe._indicator._countdown.visible')
+            # A real preview D-Bus call overrides only temporary display state.
+            bridge('SetActiveForTesting', 'false')
+            time.sleep(.2)
+            bridge('StartPresentationTimer', 10, 'true')
+            selected = evaluate('global.pe._settings.get_string("pointer-mode")')
+            remembered = evaluate('global.pe._settings.get_string("last-monitor-connector")')
+            command('gdbus', 'call', '--session', '--dest', 'org.projecteur.Gnome.Effects',
+                '--object-path', '/org/projecteur/Gnome/Effects', '--method', 'org.projecteur.Gnome.Effects.Preview', 'magnifier', '1')
+            assert evaluate('global.pe._active && global.pe._effects._lens.visible && !global.pe._daemonActive')
+            evaluate('global.pe._seat.warp_pointer(640,360); true')
+            time.sleep(2.3)
+            assert evaluate('!global.pe._active && !global.pe._previewMode && !global.pe._previewTimer && !global.pe._cursorVisibilityInhibited')
+            assert evaluate('global.pe._settings.get_string("pointer-mode")') == selected
+            assert evaluate('global.pe._settings.get_string("last-monitor-connector")') == remembered
+            timer = command('gdbus', 'call', '--session', '--dest', 'org.projecteur.Gnome',
+                '--object-path', '/org/projecteur/Gnome/Pointer', '--method', 'org.projecteur.Gnome.Pointer.GetPresentationStatus')
+            assert 'armed' in timer, 'Preview started the presentation timer'
+            bridge('ResetPresentationTimer')
+            result = command('gdbus', 'call', '--session', '--dest', 'org.projecteur.Gnome.Effects',
+                '--object-path', '/org/projecteur/Gnome/Effects', '--method', 'org.projecteur.Gnome.Effects.Preview', 'invalid', '5')
+            assert 'false' in result
             # Open GTK preferences through the panel action, not a separate CLI shortcut.
             evaluate('global.pe._indicator.menu._getMenuItems().at(-1).emit("activate", null); true')
             for attempt in range(40):
@@ -231,9 +294,9 @@ def session(daemon_path, scratch):
                 destination.mkdir(parents=True, exist_ok=True)
                 for image in scratch.glob('*.png'):
                     shutil.copyfile(image, destination / image.name)
-            evaluate('global.pe.disable(); true')
+            evaluate('global.pe.preview("magnifier",10); global.pe.disable(); true')
             assert evaluate('Main.panel.statusArea["projecteur-pointer"] === undefined')
-            assert evaluate('!global.pe._active && !global.pe._cursorVisibilityInhibited && !global.pe._positionTimer')
+            assert evaluate('!global.pe._active && !global.pe._cursorVisibilityInhibited && !global.pe._positionTimer && !global.pe._statusTimer && !global.pe._previewTimer')
             time.sleep(0.2)
             text = (scratch / 'shell.log').read_text()
             for marker in ['JS ERROR', 'Clutter-CRITICAL', 'Failed to compile', 'TypeError:', 'ReferenceError:']:

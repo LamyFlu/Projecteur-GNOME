@@ -1,5 +1,8 @@
 # Projecteur GNOME
 
+**本專案使用 Codex AI 協助改作，基於上游 Projecteur 開發 GNOME 相容版本，
+並由專案維護者進行實機測試。**
+
 在 **Ubuntu 26.04／GNOME Shell 50／Wayland** 上，使用 **Logitech Spotlight**
 控制可調整的雷射紅點、聚光與局部放大效果。
 
@@ -81,12 +84,67 @@ OnlyOffice 全螢幕簡報環境完成本機測試。
 gnome-extensions prefs projecteur-pointer-ubuntu26@projecteur.github.io
 ```
 
-本機設定視窗（繁體中文）：
+本機擷取的新版本原生設定畫面（繁體中文，使用隔離環境中的預設設定）：
 
-<img src="doc/gnome-pointer-preferences.zh-TW.png" alt="Projecteur 設定視窗：顏色、大小、隱藏滑鼠游標與停留秒數" width="640">
+<details>
+<summary>效果選擇與直接預覽</summary>
 
-點擊色塊選擇顏色；用 `−`／`＋` 調整大小與停留秒數，使用開關控制游標隱藏。
-設定會自動儲存並立即套用。圖片中的紫色、30 像素及 3 秒是示範設定，可自行調整。
+<img src="doc/gnome-pointer-preferences.zh-TW.png" alt="Projecteur GNOME 設定：效果選擇與直接預覽" width="640">
+
+</details>
+
+<details>
+<summary>簡報器按鍵自訂</summary>
+
+<img src="doc/gnome-pointer-buttons.zh-TW.png" alt="Projecteur GNOME 設定：簡報器按鍵自訂" width="640">
+
+</details>
+
+<details>
+<summary>顯示行為與游標隱藏</summary>
+
+<img src="doc/gnome-pointer-display.zh-TW.png" alt="Projecteur GNOME 設定：顯示行為與游標隱藏" width="640">
+
+</details>
+
+<details>
+<summary>聚光外觀</summary>
+
+<img src="doc/gnome-pointer-spotlight.zh-TW.png" alt="Projecteur GNOME 設定：聚光外觀" width="640">
+
+</details>
+
+<details>
+<summary>放大外觀與顯示品質</summary>
+
+<img src="doc/gnome-pointer-magnifier.zh-TW.png" alt="Projecteur GNOME 設定：放大外觀與顯示品質" width="640">
+
+</details>
+
+<details>
+<summary>雷射紅點與拖尾淡出</summary>
+
+<img src="doc/gnome-pointer-laser.zh-TW.png" alt="Projecteur GNOME 設定：雷射紅點與拖尾淡出" width="640">
+
+</details>
+
+<details>
+<summary>簡報倒數與震動</summary>
+
+<img src="doc/gnome-pointer-timer.zh-TW.png" alt="Projecteur GNOME 設定：簡報倒數與震動" width="640">
+
+</details>
+
+<details>
+<summary>設定組合與 JSON 匯出／匯入</summary>
+
+<img src="doc/gnome-pointer-presets.zh-TW.png" alt="Projecteur GNOME 設定：設定組合與 JSON 匯出／匯入" width="640">
+
+</details>
+
+可用「**預覽效果**」直接查看五秒預覽；大多數設定會立即套用，
+「按鍵自訂」需按「**套用**」。數值選項已標示範圍，
+「**轉移設定組合**」提供 JSON 匯出及匯入。
 
 可調整顏色、直徑（6–96 邏輯像素）、是否隱藏滑鼠箭頭，以及停止移動後保留紅點
 的秒數。按住 Spotlight 指示鍵並移動簡報器，即可控制紅點。
@@ -126,6 +184,46 @@ gnome-extensions prefs projecteur-pointer-ubuntu26@projecteur.github.io
 「請先啟用其中一個指示效果」，並恢復系統游標。上述截圖展示先前版本的紅點設定；新增效果位於設定視窗上方。
 雷射、聚光、放大、雙擊切換、滑鼠點擊及設定選項，已於 2026-10-11
 由使用者以原版 Spotlight USB 確認運作正常。
+
+### 倒數、效果設定組合與裝置狀態
+
+頂部選單可開始、等待下次操作、暫停、繼續及歸零簡報倒數。
+在完整設定中調整時間（1–1440 分鐘，預設 15 分鐘）。
+等待模式在下次收到簡報器操作訊號時開始，也包含指示移動。
+頂部工作列顯示剩餘時間，時間到會通知。
+震動提醒預設關閉，需簡報器具備相容的 HID++ 功能；請用「測試震動」確認。
+這批新增功能的實體震動尚待本機驗證；震動長度為裝置協定單位，不是秒數。
+重新啟動背景服務會清除正在進行的倒數。
+
+「效果設定組合」可儲存具名的外觀與效果開關，在完整設定中儲存、套用或刪除，
+也可從頂部選單直接套用；不會覆寫游標、滑鼠點擊、置中與倒數設定。
+「已連接的簡報器」顯示裝置回報的電量與充電狀態；無法取得時會明確標示。
+電量低於或等於 15% 時會通知。
+
+
+### 進階效果與按鍵自訂
+
+完整設定新增圓形／正方形／菱形聚光、旋轉角度、背景與邊框顏色、邊框寬度，
+以及預設關閉的拖尾淡出。放大品質可選平滑、文字與介面、像素格；
+像素格不保證等同原始內容的像素。還原外觀也會還原這些新增設定。
+
+「預覽效果」會跟隨滑鼠顯示 5 秒，也能預覽目前停用的效果。
+按「停止」可提早結束；之後恢復原本行為，不會改動效果開關或啟動簡報倒數。
+
+「按鍵自訂」可設定上一頁／下一頁的點按、長按或按住移動操作，選用鍵盤快捷鍵、
+切換組合／效果、倒數、捲動或音量控制。請在簡報器閒置時按「套用」。
+預設保留翻頁操作；「還原按鍵預設操作」只清除按鍵自訂。
+長按操作需要相容的羅技裝置訊號，本專案新增的操作仍待實體測試。
+
+「轉移設定組合」可將全部已儲存組合匯出成 JSON；匯入會先驗證整份檔案，
+依名稱合併並取代同名組合，不會自動套用效果。檔案僅含外觀組合。
+
+安裝程式也包含命令列控制工具 `projecteur-gnome`，例如：
+`projecteur-gnome preview laser --seconds 5` 或
+`projecteur-gnome timer start --minutes 15`。
+詳細指令請看 `projecteur-gnome --help` 與[開發說明](gnome/README.md)。
+全域快捷鍵暫時排到後續處理。
+
 
 ## 其他簡報器相容性
 

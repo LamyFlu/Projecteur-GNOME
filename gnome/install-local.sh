@@ -99,6 +99,7 @@ if systemctl --user is-active --quiet projecteur-gnome-daemon.service; then
   systemctl --user stop projecteur-gnome-daemon.service
 fi
 install -D -m 0755 "$build_dir/projecteur-gnome-daemon" "$daemon_path"
+install -D -m 0755 "$script_dir/projecteur-gnome" "$user_bin_dir/projecteur-gnome"
 # Preserve effective toggle values on upgrades before changing schema defaults.
 # First installs have no old schema and receive laser-only defaults.
 if [[ -f "$extension_dir/schemas/gschemas.compiled" ]]; then
@@ -117,7 +118,7 @@ if (schema) {
 }' "$extension_dir/schemas"
 fi
 install -d "$extension_dir" "$extension_dir/schemas" "$extension_dir/icons"
-for file in metadata.json extension.js prefs.js i18n.js pointer-effects.js pointer-state.js panel-indicator.js stylesheet.css; do
+for file in metadata.json extension.js prefs.js i18n.js pointer-effects.js pointer-state.js panel-indicator.js presets.js stylesheet.css; do
   install -m 0644 "$script_dir/extension/$file" "$extension_dir/$file"
 done
 install -m 0644 "$script_dir/extension/schemas/"*.gschema.xml "$extension_dir/schemas/"

@@ -9,6 +9,8 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
+import {readPresets, applyPreset} from './presets.js';
+import {createTranslator} from './i18n.js';
 import {PointerIndicator} from './panel-indicator.js';
 import {PointerEffects} from './pointer-effects.js';
 import {enabledModes, resolveMode, nextMode} from './pointer-state.js';
@@ -16,9 +18,19 @@ import {enabledModes, resolveMode, nextMode} from './pointer-state.js';
 const BUS_NAME = 'org.projecteur.Gnome';
 const OBJECT_PATH = '/org/projecteur/Gnome/Pointer';
 const INTERFACE = 'org.projecteur.Gnome.Pointer';
+const EFFECTS_XML = `<node><interface name="org.projecteur.Gnome.Effects">
+<method name="Preview"><arg type="s" direction="in"/><arg type="i" direction="in"/><arg type="b" direction="out"/></method>
+<method name="StopPreview"/>
+<method name="SelectEffect"><arg type="s" direction="in"/><arg type="b" direction="out"/></method>
+<method name="ApplyPreset"><arg type="s" direction="in"/><arg type="b" direction="out"/></method>
+<method name="CyclePreset"><arg type="i" direction="in"/><arg type="b" direction="out"/></method>
+<method name="OpenPreferences"/>
+</interface></node>`;
 
 export default class ProjecteurPointerExtension extends Extension {
     enable() {
+        this._previewMode = null;
+        this._previewTimer = 0;
         this._active = false;
         this._daemonActive = false;
         this._effects = new PointerEffects();
@@ -48,10 +60,12 @@ export default class ProjecteurPointerExtension extends Extension {
             this._updateCursorVisibility();
             if (['pointer-mode', 'laser-enabled', 'spotlight-enabled', 'magnifier-enabled', 'always-visible'].includes(key))
                 this._setActive(this._daemonActive);
+            if (['timer-vibration', 'vibration-intensity', 'vibration-length'].includes(key)) this._syncTimerFeedback();
             if (key === 'linger-seconds') this._syncLingerSeconds();
             if (key === 'double-click-switch') this._syncDoubleClick();
             if (key === 'start-at-monitor-center') this._syncPointerCenter();
             if (key === 'pointer-clicks-enabled') this._syncPointerClicks();
+            if (key === 'button-mappings') this._syncButtonMappings();
         });
         this._updateAppearance();
         this._monitorChanged = Main.layoutManager.connect('monitors-changed', () => this._updatePosition());
@@ -95,6 +109,21 @@ export default class ProjecteurPointerExtension extends Extension {
                 }
             });
 
+        this._actionSubscription = Gio.DBus.session.signal_subscribe(BUS_NAME, INTERFACE,
+            'PresenterAction', OBJECT_PATH, null, Gio.DBusSignalFlags.NONE,
+            (_connection, _sender, _path, _interface, _signal, params) => {
+                const [action] = params.deepUnpack();
+                if (action === 'next-preset') this._cyclePreset(1);
+                else if (action === 'previous-preset') this._cyclePreset(-1);
+                else if (action === 'toggle-effect') this._settings.set_boolean('always-visible', !this._settings.get_boolean('always-visible'));
+                else if (action === 'next-effect') {
+                    const mode = nextMode(this._mode(), this._modes());
+                    if (mode) this._settings.set_string('pointer-mode', mode);
+                } else if (action === 'timer-start') this.callService('StartPresentationTimer',
+                    new GLib.Variant('(ib)', [this._settings.get_int('timer-minutes') * 60, false])).catch(() => {});
+                else if (action === 'timer-reset') this.callService('ResetPresentationTimer').catch(() => {});
+            });
+
         this._doubleClickSubscription = Gio.DBus.session.signal_subscribe(
             BUS_NAME, INTERFACE, 'PointerDoubleClicked', OBJECT_PATH, null,
             Gio.DBusSignalFlags.NONE, () => {
@@ -108,7 +137,9 @@ export default class ProjecteurPointerExtension extends Extension {
             BUS_NAME,
             Gio.BusNameWatcherFlags.NONE,
             () => {
+                this._syncButtonMappings();
                 this._syncLingerSeconds();
+                this._syncTimerFeedback();
                 this._syncDoubleClick();
                 this._syncPointerClicks();
                 this._syncPointerCenter();
@@ -116,14 +147,50 @@ export default class ProjecteurPointerExtension extends Extension {
             },
             () => this._setActive(false));
         this._setActive(false);
+        this._effectsBus = Gio.DBusExportedObject.wrapJSObject(EFFECTS_XML, {
+            Preview: (mode, seconds) => this.preview(mode, seconds),
+            StopPreview: () => this.stopPreview(),
+            SelectEffect: mode => {
+                if (!this._modes().includes(mode)) return false;
+                this._settings.set_string('pointer-mode', mode);
+                return true;
+            },
+            ApplyPreset: name => { try { applyPreset(this._settings, name); return true; } catch (_) { return false; } },
+            CyclePreset: direction => this._cyclePreset(direction),
+            OpenPreferences: () => this.openPreferences(),
+        });
+        this._effectsBus.export(Gio.DBus.session, '/org/projecteur/Gnome/Effects');
+        this._effectsName = Gio.bus_own_name_on_connection(Gio.DBus.session,
+            'org.projecteur.Gnome.Effects', Gio.BusNameOwnerFlags.NONE, null, null);
+        this._statusEpoch = (this._statusEpoch ?? 0) + 1;
+        this._lowBattery = new Set();
+        this._lastTimerState = null;
+        this._pollStatus();
+        this._statusTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
+            this._pollStatus();
+            return GLib.SOURCE_CONTINUE;
+        });
     }
 
     disable() {
+        if (this._previewTimer) GLib.source_remove(this._previewTimer);
+        this._previewTimer = 0;
+        this._previewMode = null;
+        this._effectsBus?.unexport();
+        this._effectsBus = null;
+        if (this._effectsName) Gio.bus_unown_name(this._effectsName);
+        this._effectsName = 0;
+        this._statusEpoch++;
+        if (this._statusTimer) GLib.source_remove(this._statusTimer);
+        this._statusTimer = 0;
         this._setActive(false, true);
         if (this._monitorChanged) {
             Main.layoutManager.disconnect(this._monitorChanged);
             this._monitorChanged = 0;
         }
+        this.callService('SetButtonMappings', new GLib.Variant('(s)', ['{}'])).catch(() => {});
+        if (this._actionSubscription) Gio.DBus.session.signal_unsubscribe(this._actionSubscription);
+        this._actionSubscription = 0;
         this._syncDoubleClick(false);
         this._syncPointerClicks(false);
         this._syncPointerCenter(false);
@@ -192,9 +259,9 @@ export default class ProjecteurPointerExtension extends Extension {
 
         const wasActive = this._active;
         this._daemonActive = active;
-        active = !forceHide && (active || this._settings.get_boolean('always-visible'));
+        active = !forceHide && (active || this._previewMode !== null || this._settings.get_boolean('always-visible'));
         this._active = active;
-        const centered = active && !wasActive && this._mode() !== null &&
+        const centered = active && !wasActive && !this._previewMode && this._mode() !== null &&
             this._settings.get_boolean('start-at-monitor-center') &&
             this._centerOnRememberedMonitor();
         this._dot.visible = active && this._mode() === 'laser';
@@ -221,6 +288,38 @@ export default class ProjecteurPointerExtension extends Extension {
             }
             this._restoreUnredirect();
         }
+    }
+
+    preview(mode, seconds = 5) {
+        if (!['laser', 'spotlight', 'magnifier'].includes(mode) || !Number.isInteger(seconds) || seconds < 1 || seconds > 30)
+            return false;
+        if (this._previewTimer) GLib.source_remove(this._previewTimer);
+        this._previewMode = mode;
+        this._setActive(this._daemonActive);
+        this._previewTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, seconds, () => {
+            this._previewTimer = 0;
+            this.stopPreview();
+            return GLib.SOURCE_REMOVE;
+        });
+        return true;
+    }
+
+    stopPreview() {
+        if (this._previewTimer) GLib.source_remove(this._previewTimer);
+        this._previewTimer = 0;
+        this._previewMode = null;
+        if (this._settings) this._setActive(this._daemonActive);
+    }
+
+    _cyclePreset(direction) {
+        if (![1, -1].includes(direction)) return false;
+        const presets = readPresets(this._settings);
+        if (!presets.length) return false;
+        const current = presets.findIndex(preset => preset.name === this._settings.get_string('last-applied-preset'));
+        const index = current < 0 ? (direction > 0 ? 0 : presets.length - 1) :
+            (current + direction + presets.length) % presets.length;
+        try { applyPreset(this._settings, presets[index].name); return true; }
+        catch (_) { return false; }
     }
 
     _monitorConnector(index) {
@@ -355,7 +454,7 @@ export default class ProjecteurPointerExtension extends Extension {
         const size = this._dotSize;
         this._pointerX = Math.max(0, Math.min(global.stage.width - 1, this._pointerX));
         this._pointerY = Math.max(0, Math.min(global.stage.height - 1, this._pointerY));
-        this._rememberMonitorAt(this._pointerX, this._pointerY);
+        if (!this._previewMode) this._rememberMonitorAt(this._pointerX, this._pointerY);
         this._dot.set_position(
             Math.round(this._pointerX - size / 2),
             Math.round(this._pointerY - size / 2));
@@ -370,7 +469,60 @@ export default class ProjecteurPointerExtension extends Extension {
     }
 
     _mode() {
+        if (this._previewMode) return this._previewMode;
         return resolveMode(this._settings.get_string('pointer-mode'), this._modes());
+    }
+
+    callService(method, parameters = null) {
+        return new Promise((resolve, reject) => {
+            Gio.DBus.session.call(BUS_NAME, OBJECT_PATH, INTERFACE, method, parameters,
+                null, Gio.DBusCallFlags.NONE, 3000, null, (connection, result) => {
+                    try { resolve(connection.call_finish(result).deepUnpack()); }
+                    catch (error) { reject(error); }
+                });
+        });
+    }
+
+    _syncButtonMappings() {
+        this.callService('SetButtonMappings', new GLib.Variant('(s)', [this._settings.get_string('button-mappings')]))
+            .then(([accepted]) => { if (!accepted) console.warn('Projecteur rejected invalid button mappings.'); })
+            .catch(error => console.warn(`Projecteur button mappings: ${error.message}`));
+    }
+
+    _syncTimerFeedback() {
+        this.callService('SetTimerFeedback', new GLib.Variant('(bii)', [
+            this._settings.get_boolean('timer-vibration'),
+            this._settings.get_int('vibration-intensity'),
+            this._settings.get_int('vibration-length'),
+        ])).catch(error => console.warn(`Projecteur timer feedback: ${error.message}`));
+    }
+
+    async _pollStatus() {
+        if (this._statusPending) return;
+        const epoch = this._statusEpoch;
+        this._statusPending = true;
+        try {
+            const [json] = await this.callService('GetPresentationStatus');
+            if (epoch !== this._statusEpoch || !this._indicator) return;
+            const status = JSON.parse(json);
+            const _ = createTranslator();
+            this._indicator.updateStatus(status);
+            if (status.timerState === 'expired' && this._lastTimerState !== 'expired')
+                Main.notify(_('Presentation timer'), _('Presentation time is up.'));
+            this._lastTimerState = status.timerState;
+            const connected = new Set(status.devices.map(device => device.name));
+            for (const name of this._lowBattery) {
+                if (!connected.has(name)) this._lowBattery.delete(name);
+            }
+            for (const device of status.devices) {
+                if (device.battery >= 0 && device.battery <= 15 && !device.charging && !this._lowBattery.has(device.name)) {
+                    this._lowBattery.add(device.name);
+                    Main.notify(_('Presenter battery is low'), `${device.name}: ${device.battery}%`);
+                } else if (device.battery >= 20) this._lowBattery.delete(device.name);
+            }
+        } catch (_error) {
+            if (epoch === this._statusEpoch) this._indicator?.updateStatus(null);
+        } finally { this._statusPending = false; }
     }
 
     _syncPointerCenter(enabled = this._settings.get_boolean('start-at-monitor-center')) {

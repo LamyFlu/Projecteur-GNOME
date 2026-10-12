@@ -1,6 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
   <schema id="org.gnome.shell.extensions.projecteur-pointer" path="/org/gnome/shell/extensions/projecteur-pointer/">
+    <key name="timer-minutes" type="i"><range min="1" max="1440"/><default>15</default><summary>Presentation timer duration in minutes</summary></key>
+    <key name="timer-vibration" type="b"><default>false</default><summary>Vibrate compatible presenters when the presentation timer expires</summary></key>
+    <key name="vibration-intensity" type="i"><range min="1" max="255"/><default>128</default><summary>Timer feedback intensity</summary></key>
+    <key name="vibration-length" type="i"><range min="1" max="10"/><default>1</default><summary>Original Spotlight vibration duration units</summary></key>
+    <key name="effect-presets" type="s"><default>'[]'</default><summary>Named effect appearance presets</summary></key>
+    <key name="spotlight-shape" type="s"><choices><choice value="circle"/><choice value="square"/><choice value="diamond"/></choices><default>'circle'</default><summary>Spotlight cutout shape</summary></key>
+    <key name="spotlight-rotation" type="i"><range min="0" max="359"/><default>0</default><summary>Spotlight shape rotation in degrees</summary></key>
+    <key name="spotlight-color" type="s"><default>'rgb(0,0,0)'</default><summary>Spotlight shade color</summary></key>
+    <key name="spotlight-border-color" type="s"><default>'rgb(255,255,255)'</default><summary>Spotlight border color</summary></key>
+    <key name="spotlight-border-width" type="i"><range min="0" max="12"/><default>0</default><summary>Spotlight border width</summary></key>
+    <key name="magnifier-quality" type="s"><choices><choice value="smooth"/><choice value="text"/><choice value="pixel"/></choices><default>'smooth'</default><summary>Magnifier sampling quality</summary></key>
+    <key name="trail-enabled" type="b"><default>false</default><summary>Enable fading pointer trail</summary></key>
+    <key name="trail-seconds" type="d"><range min="0.1" max="2.0"/><default>0.5</default><summary>Pointer trail lifetime in seconds</summary></key>
+    <key name="button-mappings" type="s"><default>'{}'</default><summary>Optional presenter button actions</summary></key>
+    <key name="last-applied-preset" type="s"><default>''</default><summary>Name of the last explicitly applied preset</summary></key>
     <key name="dot-color" type="s">
       <default>'rgb(255,24,24)'</default>
       <summary>Laser dot color</summary>

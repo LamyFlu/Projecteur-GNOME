@@ -1,5 +1,8 @@
 # Projecteur GNOME
 
+**This project was adapted from upstream Projecteur with assistance from Codex AI,
+and tested on hardware by the project maintainer.**
+
 Laser dot, spotlight, and local magnification for **Logitech Spotlight** on **Ubuntu 26.04,
 GNOME Shell 50, and Wayland**.
 
@@ -91,15 +94,67 @@ app is required:
 gnome-extensions prefs projecteur-pointer-ubuntu26@projecteur.github.io
 ```
 
-Preferences captured on a local Traditional Chinese desktop:
+Updated native preferences screenshots (English), captured locally with isolated default settings:
 
-<img src="doc/gnome-pointer-preferences.zh-TW.png" alt="Projecteur preferences with color, size, mouse cursor hiding, and linger duration controls" width="640">
+<details>
+<summary>Effect selection and preview</summary>
 
-From top to bottom: color, size, mouse cursor hiding, linger duration, and reset
-appearance. Click the color swatch, use `−` / `+` for numeric values, and use the
-switch for cursor hiding. Changes are saved and applied immediately. The purple
-color, 30-pixel diameter, and 3-second duration are example preferences.
-On non-Chinese systems, these controls appear in English.
+<img src="doc/gnome-pointer-preferences.en.png" alt="Effect selection and preview in Projecteur GNOME preferences" width="640">
+
+</details>
+
+<details>
+<summary>Presenter button actions</summary>
+
+<img src="doc/gnome-pointer-buttons.en.png" alt="Presenter button actions in Projecteur GNOME preferences" width="640">
+
+</details>
+
+<details>
+<summary>Display behavior and cursor hiding</summary>
+
+<img src="doc/gnome-pointer-display.en.png" alt="Display behavior and cursor hiding in Projecteur GNOME preferences" width="640">
+
+</details>
+
+<details>
+<summary>Spotlight appearance</summary>
+
+<img src="doc/gnome-pointer-spotlight.en.png" alt="Spotlight appearance in Projecteur GNOME preferences" width="640">
+
+</details>
+
+<details>
+<summary>Magnifier appearance and quality</summary>
+
+<img src="doc/gnome-pointer-magnifier.en.png" alt="Magnifier appearance and quality in Projecteur GNOME preferences" width="640">
+
+</details>
+
+<details>
+<summary>Laser dot and fading trail</summary>
+
+<img src="doc/gnome-pointer-laser.en.png" alt="Laser dot and fading trail in Projecteur GNOME preferences" width="640">
+
+</details>
+
+<details>
+<summary>Presentation timer and vibration</summary>
+
+<img src="doc/gnome-pointer-timer.en.png" alt="Presentation timer and vibration in Projecteur GNOME preferences" width="640">
+
+</details>
+
+<details>
+<summary>Saved presets and JSON transfer</summary>
+
+<img src="doc/gnome-pointer-presets.en.png" alt="Saved presets and JSON transfer in Projecteur GNOME preferences" width="640">
+
+</details>
+
+Use **Preview effects** to test the current appearance for five seconds. Most
+settings apply immediately; button mappings require **Apply**. Numeric controls
+show their ranges, and **Transfer presets** exports or imports JSON files.
 
 Choose the color, diameter (6–96 logical pixels), whether to hide the mouse
 cursor, and how long the dot stays visible after movement stops. Hold the
@@ -152,6 +207,52 @@ and the system cursor is restored. The screenshot above shows the
 previous laser-only preferences; the new effect controls appear at the top.
 The user confirmed laser, spotlight, magnifier, native double-click switching,
 mouse clicks, and preferences on the original Spotlight USB device on 2026-10-11.
+
+### Timer, saved effects and presenter status
+
+Use the top-panel menu to start, arm, pause, resume or reset the presentation
+countdown. Set its duration (1–1440 minutes, default 15) in preferences.
+Arming starts on the next reported presenter action, including movement.
+The top bar displays the remaining time; expiry produces a notification.
+Optional vibration is off by default and requires a compatible HID++ presenter.
+Use **Test vibration** to verify your device; hardware feedback is not yet
+verified on this fork. Duration uses device protocol units, not seconds.
+Restarting the background service resets the running timer.
+
+**Effect presets** save named appearance and effect combinations. Save, apply
+or delete them in preferences, then select them from the top-panel menu.
+They preserve your cursor, click, centering and timer preferences.
+**Connected presenters** shows reported battery/charging status; unavailable
+battery readings are identified explicitly. Low battery (15% or below) triggers
+a notification.
+
+
+### Advanced effects and presenter buttons
+
+Preferences now includes circle/square/diamond spotlight shapes, rotation,
+shade/border colors and width, and an optional fading pointer trail. Magnifier
+quality offers Smooth, Text and UI, or Pixel grid; pixel grid may differ from
+original source pixels. Appearance resets include the new controls.
+
+Use **Preview effects** to follow the mouse for 5 seconds, including effects
+currently disabled. **Stop** ends the preview; normal behavior is restored
+without changing effect enablement or starting a presentation countdown.
+
+**Button actions** optionally maps Next/Back taps, long presses or hold-and-move
+to keyboard combinations, presets/effects, timer actions, scrolling or volume.
+Choose **Apply** while the presenter is idle. Defaults preserve slide navigation;
+**Restore default buttons** clears only mappings. Hold gestures need compatible
+Logitech reports and still require physical testing on this fork.
+
+**Transfer presets** exports all saved combinations to JSON. Import merges by
+name and replaces matching names after full validation; it does not apply an
+effect automatically. The file contains appearance presets only.
+
+The installer also includes `projecteur-gnome`, a command-line controller. For
+example: `projecteur-gnome preview laser --seconds 5` or
+`projecteur-gnome timer start --minutes 15`. See `projecteur-gnome --help` and
+[developer notes](gnome/README.md) for details. Global shortcuts are deferred.
+
 
 ## Other presenters
 

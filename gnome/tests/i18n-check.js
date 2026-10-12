@@ -1,6 +1,13 @@
 import {createTranslator} from '../extension/i18n.js';
 
 const labels = new Map([
+    ['Preview effects', '預覽效果'],
+    ['Export all', '匯出全部'],
+    ['Button actions', '按鍵自訂'],
+    ['Pixel grid', '像素格'],
+    ['Presentation timer', '簡報倒數'],
+    ['Effect presets', '效果設定組合'],
+    ['Connected presenters', '已連接的簡報器'],
     ['Always show the pointer effect', '永久顯示指示效果'],
     ['Current effect', '目前效果'],
     ['Display behavior', '顯示行為'],

@@ -69,3 +69,22 @@ Other presenters use reported `BTN_LEFT` presses when available. Multi-monitor
 centering and repeated presses are verified in isolated GNOME tests; the newly
 added original Spotlight USB long-press path was confirmed by the user on
 2026-10-11. Bluetooth and other models remain hardware-unverified.
+
+## Timer haptics and battery status
+
+The GNOME timer uses upstream capability-gated vibration for devices exposing
+that feature; battery polling likewise requires ReportBattery. Listing a model
+or capability does not verify physical feedback or battery accuracy.
+The owner reported successful testing of the new GNOME batch on original
+Spotlight USB on 2026-10-12; Bluetooth and other models remain unverified.
+
+## Optional button mappings and gestures
+
+Next/Back aliases and upstream hold/hold-move sequences can now be mapped in
+GNOME preferences. Default mappings are empty; navigation is preserved.
+The owner reported this newly exposed GNOME batch working on original
+Spotlight USB on 2026-10-12; gesture behavior on other models remains unverified.
+Enabling a UI action does
+not prove that a device emits the corresponding upstream sequence. Existing
+capability-gated hold initialization is reused; no additional original-model
+control command is sent to other presenters.
